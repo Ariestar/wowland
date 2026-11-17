@@ -1,0 +1,993 @@
+{
+  "project": "上元灯夜 / Shangyuan Lantern Night",
+  "blend": "D:\\Projects\\Sjr-website\\assets\\blender\\shangyuan-lantern-night.blend",
+  "passed": true,
+  "errors": [],
+  "totals": {
+    "resources": 24,
+    "objects": 44,
+    "mesh_objects": 42,
+    "triangles": 246436,
+    "materials": 12,
+    "triangle_budget": 250000,
+    "material_budget": 12,
+    "gi_baked": false
+  },
+  "material_names": [
+    "SY_DarkWood",
+    "SY_Foliage",
+    "SY_Gold",
+    "SY_Lantern",
+    "SY_Paper",
+    "SY_Plaster",
+    "SY_Reflection",
+    "SY_Roof",
+    "SY_Stone",
+    "SY_Vermilion",
+    "SY_Water",
+    "SY_Wood"
+  ],
+  "resources": {
+    "model-boat": {
+      "objects": 1,
+      "mesh_objects": 1,
+      "triangles": 4764,
+      "dimensions_local_m": [
+        11.239,
+        3.55,
+        4.319
+      ],
+      "bounds_local_m": {
+        "min": [
+          -5.5,
+          -1.775,
+          0.0
+        ],
+        "max": [
+          5.739,
+          1.775,
+          4.319
+        ]
+      },
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Roof",
+        "SY_Stone",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": []
+    },
+    "model-bridge": {
+      "objects": 1,
+      "mesh_objects": 1,
+      "triangles": 11540,
+      "dimensions_local_m": [
+        6.5,
+        29.7,
+        5.87
+      ],
+      "bounds_local_m": {
+        "min": [
+          -3.25,
+          -14.85,
+          0.25
+        ],
+        "max": [
+          3.25,
+          14.85,
+          6.12
+        ]
+      },
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Stone",
+        "SY_Vermilion"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": []
+    },
+    "model-lantern-array-s1": {
+      "objects": 1,
+      "mesh_objects": 1,
+      "triangles": 19665,
+      "dimensions_local_m": [
+        31.597,
+        36.065,
+        5.205
+      ],
+      "bounds_local_m": {
+        "min": [
+          -25.24,
+          -13.425,
+          0.575
+        ],
+        "max": [
+          6.358,
+          22.64,
+          5.78
+        ]
+      },
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Stone",
+        "SY_Vermilion"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": []
+    },
+    "model-lantern-array-s2": {
+      "objects": 1,
+      "mesh_objects": 1,
+      "triangles": 10177,
+      "dimensions_local_m": [
+        12.715,
+        35.595,
+        5.205
+      ],
+      "bounds_local_m": {
+        "min": [
+          -6.358,
+          -13.425,
+          0.575
+        ],
+        "max": [
+          6.358,
+          22.17,
+          5.78
+        ]
+      },
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Stone",
+        "SY_Vermilion"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": []
+    },
+    "model-lantern-array-s3": {
+      "objects": 1,
+      "mesh_objects": 1,
+      "triangles": 10177,
+      "dimensions_local_m": [
+        12.715,
+        35.595,
+        5.205
+      ],
+      "bounds_local_m": {
+        "min": [
+          -6.358,
+          -13.425,
+          0.575
+        ],
+        "max": [
+          6.358,
+          22.17,
+          5.78
+        ]
+      },
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Stone",
+        "SY_Vermilion"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": []
+    },
+    "model-lantern-array-s4": {
+      "objects": 1,
+      "mesh_objects": 1,
+      "triangles": 10177,
+      "dimensions_local_m": [
+        12.715,
+        35.595,
+        5.205
+      ],
+      "bounds_local_m": {
+        "min": [
+          -6.358,
+          -13.425,
+          0.575
+        ],
+        "max": [
+          6.358,
+          22.17,
+          5.78
+        ]
+      },
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Stone",
+        "SY_Vermilion"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": []
+    },
+    "model-lantern-tower": {
+      "objects": 6,
+      "mesh_objects": 4,
+      "triangles": 27156,
+      "dimensions_local_m": [
+        12.971,
+        12.971,
+        15.875
+      ],
+      "bounds_local_m": {
+        "min": [
+          -6.485,
+          -6.485,
+          0.0
+        ],
+        "max": [
+          6.485,
+          6.485,
+          15.875
+        ]
+      },
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Plaster",
+        "SY_Roof",
+        "SY_Stone",
+        "SY_Vermilion"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": [
+        "pivot-lantern-wheel-01",
+        "pivot-lantern-wheel-02"
+      ]
+    },
+    "model-paifang": {
+      "objects": 2,
+      "mesh_objects": 2,
+      "triangles": 12396,
+      "dimensions_local_m": [
+        11.551,
+        2.85,
+        7.114
+      ],
+      "bounds_local_m": {
+        "min": [
+          -5.775,
+          -1.425,
+          0.005
+        ],
+        "max": [
+          5.775,
+          1.425,
+          7.119
+        ]
+      },
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Roof",
+        "SY_Stone",
+        "SY_Vermilion"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": []
+    },
+    "model-performance": {
+      "objects": 1,
+      "mesh_objects": 1,
+      "triangles": 4772,
+      "dimensions_local_m": [
+        12.251,
+        8.35,
+        7.019
+      ],
+      "bounds_local_m": {
+        "min": [
+          -6.125,
+          -4.175,
+          0.0
+        ],
+        "max": [
+          6.125,
+          4.175,
+          7.019
+        ]
+      },
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Roof",
+        "SY_Stone",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": []
+    },
+    "model-quay": {
+      "objects": 1,
+      "mesh_objects": 1,
+      "triangles": 4128,
+      "dimensions_local_m": [
+        8.582,
+        10.298,
+        2.465
+      ],
+      "bounds_local_m": {
+        "min": [
+          -4.291,
+          -6.723,
+          -0.13
+        ],
+        "max": [
+          4.291,
+          3.575,
+          2.335
+        ]
+      },
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Stone",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": []
+    },
+    "model-river-lantern-fish": {
+      "objects": 1,
+      "mesh_objects": 1,
+      "triangles": 248,
+      "dimensions_local_m": [
+        2.287,
+        1.44,
+        0.957
+      ],
+      "bounds_local_m": {
+        "min": [
+          -1.2,
+          -0.72,
+          -0.057
+        ],
+        "max": [
+          1.087,
+          0.72,
+          0.9
+        ]
+      },
+      "materials": [
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Vermilion"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": []
+    },
+    "model-river-lantern-lotus": {
+      "objects": 1,
+      "mesh_objects": 1,
+      "triangles": 116,
+      "dimensions_local_m": [
+        0.96,
+        0.96,
+        0.405
+      ],
+      "bounds_local_m": {
+        "min": [
+          -0.48,
+          -0.48,
+          0.04
+        ],
+        "max": [
+          0.48,
+          0.48,
+          0.445
+        ]
+      },
+      "materials": [
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Vermilion"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": []
+    },
+    "model-river-lantern-paperboat": {
+      "objects": 1,
+      "mesh_objects": 1,
+      "triangles": 44,
+      "dimensions_local_m": [
+        0.975,
+        0.416,
+        0.39
+      ],
+      "bounds_local_m": {
+        "min": [
+          -0.487,
+          -0.208,
+          0.013
+        ],
+        "max": [
+          0.487,
+          0.208,
+          0.403
+        ]
+      },
+      "materials": [
+        "SY_Lantern",
+        "SY_Paper"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": []
+    },
+    "model-riverbanks": {
+      "objects": 1,
+      "mesh_objects": 1,
+      "triangles": 50366,
+      "dimensions_local_m": [
+        314.88,
+        78.048,
+        7.815
+      ],
+      "bounds_local_m": {
+        "min": [
+          -172.13,
+          -39.048,
+          -0.62
+        ],
+        "max": [
+          142.75,
+          39.0,
+          7.195
+        ]
+      },
+      "materials": [
+        "SY_DarkWood",
+        "SY_Foliage",
+        "SY_Paper",
+        "SY_Plaster",
+        "SY_Roof",
+        "SY_Stone",
+        "SY_Wood"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": []
+    },
+    "model-shop-01": {
+      "objects": 3,
+      "mesh_objects": 3,
+      "triangles": 9386,
+      "dimensions_local_m": [
+        10.551,
+        9.275,
+        5.944
+      ],
+      "bounds_local_m": {
+        "min": [
+          -5.275,
+          -5.1,
+          -0.075
+        ],
+        "max": [
+          5.275,
+          4.175,
+          5.869
+        ]
+      },
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Plaster",
+        "SY_Roof",
+        "SY_Stone",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": []
+    },
+    "model-shop-02": {
+      "objects": 3,
+      "mesh_objects": 3,
+      "triangles": 12002,
+      "dimensions_local_m": [
+        11.551,
+        9.775,
+        8.994
+      ],
+      "bounds_local_m": {
+        "min": [
+          -5.775,
+          -5.35,
+          -0.075
+        ],
+        "max": [
+          5.775,
+          4.425,
+          8.919
+        ]
+      },
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Plaster",
+        "SY_Roof",
+        "SY_Stone",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": []
+    },
+    "model-shop-03": {
+      "objects": 3,
+      "mesh_objects": 3,
+      "triangles": 9530,
+      "dimensions_local_m": [
+        11.051,
+        8.775,
+        5.944
+      ],
+      "bounds_local_m": {
+        "min": [
+          -5.525,
+          -4.85,
+          -0.075
+        ],
+        "max": [
+          5.525,
+          3.925,
+          5.869
+        ]
+      },
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Plaster",
+        "SY_Roof",
+        "SY_Stone",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": []
+    },
+    "model-shop-04": {
+      "objects": 3,
+      "mesh_objects": 3,
+      "triangles": 11658,
+      "dimensions_local_m": [
+        12.051,
+        9.775,
+        8.994
+      ],
+      "bounds_local_m": {
+        "min": [
+          -6.025,
+          -5.35,
+          -0.075
+        ],
+        "max": [
+          6.025,
+          4.425,
+          8.919
+        ]
+      },
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Plaster",
+        "SY_Roof",
+        "SY_Stone",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": []
+    },
+    "model-shop-05": {
+      "objects": 3,
+      "mesh_objects": 3,
+      "triangles": 9682,
+      "dimensions_local_m": [
+        10.551,
+        9.275,
+        5.944
+      ],
+      "bounds_local_m": {
+        "min": [
+          -5.275,
+          -5.1,
+          -0.075
+        ],
+        "max": [
+          5.275,
+          4.175,
+          5.869
+        ]
+      },
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Plaster",
+        "SY_Roof",
+        "SY_Stone",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": []
+    },
+    "model-shop-06": {
+      "objects": 3,
+      "mesh_objects": 3,
+      "triangles": 18854,
+      "dimensions_local_m": [
+        15.201,
+        15.125,
+        9.294
+      ],
+      "bounds_local_m": {
+        "min": [
+          -7.325,
+          -6.35,
+          -0.075
+        ],
+        "max": [
+          7.875,
+          8.775,
+          9.219
+        ]
+      },
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Plaster",
+        "SY_Roof",
+        "SY_Stone",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": []
+    },
+    "model-skiff": {
+      "objects": 1,
+      "mesh_objects": 1,
+      "triangles": 376,
+      "dimensions_local_m": [
+        5.5,
+        2.192,
+        1.225
+      ],
+      "bounds_local_m": {
+        "min": [
+          -2.75,
+          -1.292,
+          0.0
+        ],
+        "max": [
+          2.75,
+          0.9,
+          1.225
+        ]
+      },
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": []
+    },
+    "model-stall-riddle": {
+      "objects": 2,
+      "mesh_objects": 2,
+      "triangles": 2479,
+      "dimensions_local_m": [
+        5.315,
+        3.529,
+        2.81
+      ],
+      "bounds_local_m": {
+        "min": [
+          -2.792,
+          -1.829,
+          0.46
+        ],
+        "max": [
+          2.523,
+          1.7,
+          3.27
+        ]
+      },
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Stone",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": []
+    },
+    "model-stall-tea": {
+      "objects": 2,
+      "mesh_objects": 2,
+      "triangles": 2295,
+      "dimensions_local_m": [
+        4.915,
+        3.929,
+        2.8
+      ],
+      "bounds_local_m": {
+        "min": [
+          -2.592,
+          -2.029,
+          0.46
+        ],
+        "max": [
+          2.323,
+          1.9,
+          3.26
+        ]
+      },
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Stone",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": []
+    },
+    "model-water": {
+      "objects": 1,
+      "mesh_objects": 1,
+      "triangles": 4448,
+      "dimensions_local_m": [
+        180.0,
+        24.0,
+        0.311
+      ],
+      "bounds_local_m": {
+        "min": [
+          -90.0,
+          -12.0,
+          -0.048
+        ],
+        "max": [
+          90.0,
+          12.0,
+          0.263
+        ]
+      },
+      "materials": [
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Reflection",
+        "SY_Vermilion",
+        "SY_Water"
+      ],
+      "missing_materials": [],
+      "origin_error_m": 0.0,
+      "non_unit_scale_max_error": 0.0,
+      "dynamic_pivots": []
+    }
+  },
+  "exports": {
+    "model-riverbanks": {
+      "exists": true,
+      "bytes": 2946964,
+      "valid_glb_header": true
+    },
+    "model-water": {
+      "exists": true,
+      "bytes": 216796,
+      "valid_glb_header": true
+    },
+    "model-paifang": {
+      "exists": true,
+      "bytes": 475216,
+      "valid_glb_header": true
+    },
+    "model-bridge": {
+      "exists": true,
+      "bytes": 575156,
+      "valid_glb_header": true
+    },
+    "model-lantern-tower": {
+      "exists": true,
+      "bytes": 1235592,
+      "valid_glb_header": true
+    },
+    "model-shop-01": {
+      "exists": true,
+      "bytes": 450916,
+      "valid_glb_header": true
+    },
+    "model-shop-02": {
+      "exists": true,
+      "bytes": 577788,
+      "valid_glb_header": true
+    },
+    "model-shop-03": {
+      "exists": true,
+      "bytes": 454932,
+      "valid_glb_header": true
+    },
+    "model-shop-04": {
+      "exists": true,
+      "bytes": 569204,
+      "valid_glb_header": true
+    },
+    "model-shop-05": {
+      "exists": true,
+      "bytes": 460380,
+      "valid_glb_header": true
+    },
+    "model-shop-06": {
+      "exists": true,
+      "bytes": 854468,
+      "valid_glb_header": true
+    },
+    "model-stall-riddle": {
+      "exists": true,
+      "bytes": 120008,
+      "valid_glb_header": true
+    },
+    "model-stall-tea": {
+      "exists": true,
+      "bytes": 97408,
+      "valid_glb_header": true
+    },
+    "model-lantern-array-s1": {
+      "exists": true,
+      "bytes": 773340,
+      "valid_glb_header": true
+    },
+    "model-lantern-array-s2": {
+      "exists": true,
+      "bytes": 403808,
+      "valid_glb_header": true
+    },
+    "model-lantern-array-s3": {
+      "exists": true,
+      "bytes": 403808,
+      "valid_glb_header": true
+    },
+    "model-lantern-array-s4": {
+      "exists": true,
+      "bytes": 403808,
+      "valid_glb_header": true
+    },
+    "model-river-lantern-lotus": {
+      "exists": true,
+      "bytes": 7944,
+      "valid_glb_header": true
+    },
+    "model-river-lantern-paperboat": {
+      "exists": true,
+      "bytes": 4204,
+      "valid_glb_header": true
+    },
+    "model-river-lantern-fish": {
+      "exists": true,
+      "bytes": 8964,
+      "valid_glb_header": true
+    },
+    "model-boat": {
+      "exists": true,
+      "bytes": 202840,
+      "valid_glb_header": true
+    },
+    "model-skiff": {
+      "exists": true,
+      "bytes": 22384,
+      "valid_glb_header": true
+    },
+    "model-performance": {
+      "exists": true,
+      "bytes": 206332,
+      "valid_glb_header": true
+    },
+    "model-quay": {
+      "exists": true,
+      "bytes": 202752,
+      "valid_glb_header": true
+    },
+    "greybox": {
+      "exists": true,
+      "bytes": 679416,
+      "valid_glb_header": true
+    }
+  }
+}

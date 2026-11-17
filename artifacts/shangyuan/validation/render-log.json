@@ -1,0 +1,32 @@
+[
+  {
+    "camera": "Camera_Entrance",
+    "path": "D:\\Projects\\Sjr-website\\artifacts\\shangyuan\\preview\\01-entrance.png",
+    "bytes": 1060746,
+    "resolution": [
+      1280,
+      720
+    ],
+    "engine": "Eevee"
+  },
+  {
+    "camera": "Camera_Bridge",
+    "path": "D:\\Projects\\Sjr-website\\artifacts\\shangyuan\\preview\\02-bridge.png",
+    "bytes": 1020153,
+    "resolution": [
+      1280,
+      720
+    ],
+    "engine": "Eevee"
+  },
+  {
+    "camera": "Camera_Quay",
+    "path": "D:\\Projects\\Sjr-website\\artifacts\\shangyuan\\preview\\03-quay.png",
+    "bytes": 950753,
+    "resolution": [
+      1280,
+      720
+    ],
+    "engine": "Eevee"
+  }
+]

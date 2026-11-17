@@ -1,0 +1,9 @@
+{
+  "mode": "full",
+  "blend": "D:\\Projects\\Sjr-website\\assets\\blender\\shangyuan-lantern-night.blend",
+  "resources": 24,
+  "font_path": "C:\\Windows\\Fonts\\msyh.ttc",
+  "font_error": null,
+  "materials": 12,
+  "gi_bake": false
+}

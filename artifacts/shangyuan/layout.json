@@ -1,0 +1,1018 @@
+{
+  "title": "上元灯夜 / Shangyuan Lantern Night",
+  "version": 1,
+  "units": "meters",
+  "source_axes": "Blender Z-up; river along X; north +Y",
+  "export_axes": "glTF Y-up; game=(x,z,-y)",
+  "baked": false,
+  "water": {
+    "id": "model-water",
+    "realtime": true,
+    "extent_blender": {
+      "x": [
+        0,
+        180
+      ],
+      "y": [
+        -12,
+        12
+      ],
+      "z": 0
+    }
+  },
+  "route": {
+    "length_m_approx": 260,
+    "street_width_m": 6,
+    "waypoints_blender": [
+      [
+        10,
+        18,
+        0.65
+      ],
+      [
+        20,
+        18,
+        0.65
+      ],
+      [
+        90,
+        18,
+        0.65
+      ],
+      [
+        90,
+        -18,
+        0.65
+      ],
+      [
+        140,
+        -18,
+        0.65
+      ],
+      [
+        125,
+        5,
+        0.25
+      ]
+    ]
+  },
+  "spawn": {
+    "id": "spawn-entrance",
+    "position_blender": [
+      10,
+      18,
+      1.45
+    ],
+    "forward_blender": [
+      1,
+      0,
+      0
+    ]
+  },
+  "photo_spots": [
+    {
+      "id": "entrance",
+      "position_blender": [
+        12,
+        18,
+        2.1
+      ],
+      "target_blender": [
+        25,
+        18,
+        3.8
+      ]
+    },
+    {
+      "id": "bridge-top",
+      "position_blender": [
+        90,
+        0,
+        4.85
+      ],
+      "target_blender": [
+        98,
+        23,
+        8
+      ]
+    },
+    {
+      "id": "quay",
+      "position_blender": [
+        125,
+        5,
+        1.7
+      ],
+      "target_blender": [
+        98,
+        23,
+        8
+      ]
+    }
+  ],
+  "triggers": [
+    {
+      "id": "riddle",
+      "resource": "model-stall-riddle",
+      "position_blender": [
+        67,
+        15,
+        1.3
+      ],
+      "radius_m": 2.5
+    },
+    {
+      "id": "tea-rest",
+      "resource": "model-stall-tea",
+      "position_blender": [
+        133,
+        21,
+        1.3
+      ],
+      "radius_m": 2.5
+    },
+    {
+      "id": "release-lantern",
+      "resource": "model-quay",
+      "position_blender": [
+        125,
+        5,
+        0.8
+      ],
+      "radius_m": 3.0
+    },
+    {
+      "id": "performance",
+      "resource": "model-performance",
+      "position_blender": [
+        140,
+        -17,
+        1.5
+      ],
+      "radius_m": 6.0
+    },
+    {
+      "id": "boat-boarding",
+      "resource": "model-boat",
+      "position_blender": [
+        55,
+        -4,
+        0.8
+      ],
+      "radius_m": 4.0
+    }
+  ],
+  "resources": [
+    {
+      "id": "model-boat",
+      "file": "models/model-boat.glb",
+      "collection": "SYR_model-boat",
+      "position_blender": [
+        55.0,
+        -4.0,
+        0.029999999329447746
+      ],
+      "position_yup": [
+        55.0,
+        0.029999999329447746,
+        4.0
+      ],
+      "rotation_z_blender": 0.0,
+      "rotation_y_yup": 0.0,
+      "dimensions_local_m": [
+        11.239,
+        3.55,
+        4.319
+      ],
+      "triangles": 4764,
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Roof",
+        "SY_Stone",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "dynamic_pivots": [],
+      "bytes": 202840,
+      "collision": "simple convex/box proxies recommended",
+      "origin_note": "local Z=0 at waterline; pivot at hull centre"
+    },
+    {
+      "id": "model-bridge",
+      "file": "models/model-bridge.glb",
+      "collection": "SYR_model-bridge",
+      "position_blender": [
+        90.0,
+        0.0,
+        0.0
+      ],
+      "position_yup": [
+        90.0,
+        0.0,
+        -0.0
+      ],
+      "rotation_z_blender": 0.0,
+      "rotation_y_yup": 0.0,
+      "dimensions_local_m": [
+        6.5,
+        29.7,
+        5.87
+      ],
+      "triangles": 11540,
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Stone",
+        "SY_Vermilion"
+      ],
+      "dynamic_pivots": [],
+      "bytes": 575156,
+      "collision": "24-32 thin deck boxes following deck_height(y); rail boxes; stepped approaches need invisible ramp strips"
+    },
+    {
+      "id": "model-lantern-array-s1",
+      "file": "models/model-lantern-array-s1.glb",
+      "collection": "SYR_model-lantern-array-s1",
+      "position_blender": [
+        38.0,
+        0.0,
+        0.0
+      ],
+      "position_yup": [
+        38.0,
+        0.0,
+        -0.0
+      ],
+      "rotation_z_blender": 0.0,
+      "rotation_y_yup": 0.0,
+      "dimensions_local_m": [
+        31.597,
+        36.065,
+        5.205
+      ],
+      "triangles": 19665,
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Stone",
+        "SY_Vermilion"
+      ],
+      "dynamic_pivots": [],
+      "bytes": 773340,
+      "collision": "bank and street edge pole cylinders only; central route and overhead catenaries remain clear"
+    },
+    {
+      "id": "model-lantern-array-s2",
+      "file": "models/model-lantern-array-s2.glb",
+      "collection": "SYR_model-lantern-array-s2",
+      "position_blender": [
+        72.0,
+        0.0,
+        0.0
+      ],
+      "position_yup": [
+        72.0,
+        0.0,
+        -0.0
+      ],
+      "rotation_z_blender": 0.0,
+      "rotation_y_yup": 0.0,
+      "dimensions_local_m": [
+        12.715,
+        35.595,
+        5.205
+      ],
+      "triangles": 10177,
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Stone",
+        "SY_Vermilion"
+      ],
+      "dynamic_pivots": [],
+      "bytes": 403808,
+      "collision": "bank and street edge pole cylinders only; central route and overhead catenaries remain clear"
+    },
+    {
+      "id": "model-lantern-array-s3",
+      "file": "models/model-lantern-array-s3.glb",
+      "collection": "SYR_model-lantern-array-s3",
+      "position_blender": [
+        128.0,
+        0.0,
+        0.0
+      ],
+      "position_yup": [
+        128.0,
+        0.0,
+        -0.0
+      ],
+      "rotation_z_blender": 0.0,
+      "rotation_y_yup": 0.0,
+      "dimensions_local_m": [
+        12.715,
+        35.595,
+        5.205
+      ],
+      "triangles": 10177,
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Stone",
+        "SY_Vermilion"
+      ],
+      "dynamic_pivots": [],
+      "bytes": 403808,
+      "collision": "bank and street edge pole cylinders only; central route and overhead catenaries remain clear"
+    },
+    {
+      "id": "model-lantern-array-s4",
+      "file": "models/model-lantern-array-s4.glb",
+      "collection": "SYR_model-lantern-array-s4",
+      "position_blender": [
+        162.0,
+        0.0,
+        0.0
+      ],
+      "position_yup": [
+        162.0,
+        0.0,
+        -0.0
+      ],
+      "rotation_z_blender": 0.0,
+      "rotation_y_yup": 0.0,
+      "dimensions_local_m": [
+        12.715,
+        35.595,
+        5.205
+      ],
+      "triangles": 10177,
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Stone",
+        "SY_Vermilion"
+      ],
+      "dynamic_pivots": [],
+      "bytes": 403808,
+      "collision": "bank and street edge pole cylinders only; central route and overhead catenaries remain clear"
+    },
+    {
+      "id": "model-lantern-tower",
+      "file": "models/model-lantern-tower.glb",
+      "collection": "SYR_model-lantern-tower",
+      "position_blender": [
+        98.0,
+        23.0,
+        0.5799999833106995
+      ],
+      "position_yup": [
+        98.0,
+        0.5799999833106995,
+        -23.0
+      ],
+      "rotation_z_blender": 0.0,
+      "rotation_y_yup": 0.0,
+      "dimensions_local_m": [
+        12.971,
+        12.971,
+        15.875
+      ],
+      "triangles": 27156,
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Plaster",
+        "SY_Roof",
+        "SY_Stone",
+        "SY_Vermilion"
+      ],
+      "dynamic_pivots": [
+        {
+          "name": "pivot-lantern-wheel-01",
+          "pivot": "lantern-wheel",
+          "axis": "Z"
+        },
+        {
+          "name": "pivot-lantern-wheel-02",
+          "pivot": "lantern-wheel",
+          "axis": "Z"
+        }
+      ],
+      "bytes": 1235592,
+      "collision": "12x12 base box; three stories are exterior-only, no interior collision required"
+    },
+    {
+      "id": "model-paifang",
+      "file": "models/model-paifang.glb",
+      "collection": "SYR_model-paifang",
+      "position_blender": [
+        20.0,
+        18.0,
+        0.5799999833106995
+      ],
+      "position_yup": [
+        20.0,
+        0.5799999833106995,
+        -18.0
+      ],
+      "rotation_z_blender": -1.570796251296997,
+      "rotation_y_yup": -1.570796251296997,
+      "dimensions_local_m": [
+        11.551,
+        2.85,
+        7.114
+      ],
+      "triangles": 12396,
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Roof",
+        "SY_Stone",
+        "SY_Vermilion"
+      ],
+      "dynamic_pivots": [],
+      "bytes": 475216,
+      "collision": "four cylinder column proxies; keep central 4.8m passage clear"
+    },
+    {
+      "id": "model-performance",
+      "file": "models/model-performance.glb",
+      "collection": "SYR_model-performance",
+      "position_blender": [
+        140.0,
+        -21.0,
+        0.5799999833106995
+      ],
+      "position_yup": [
+        140.0,
+        0.5799999833106995,
+        21.0
+      ],
+      "rotation_z_blender": 3.141592502593994,
+      "rotation_y_yup": 3.141592502593994,
+      "dimensions_local_m": [
+        12.251,
+        8.35,
+        7.019
+      ],
+      "triangles": 4772,
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Roof",
+        "SY_Stone",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "dynamic_pivots": [],
+      "bytes": 206332,
+      "collision": "simple convex/box proxies recommended",
+      "interaction": "scheduled river-performance trigger"
+    },
+    {
+      "id": "model-quay",
+      "file": "models/model-quay.glb",
+      "collection": "SYR_model-quay",
+      "position_blender": [
+        125.0,
+        8.5,
+        0.0
+      ],
+      "position_yup": [
+        125.0,
+        0.0,
+        -8.5
+      ],
+      "rotation_z_blender": 0.0,
+      "rotation_y_yup": 0.0,
+      "dimensions_local_m": [
+        8.582,
+        10.298,
+        2.465
+      ],
+      "triangles": 4128,
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Stone",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "dynamic_pivots": [],
+      "bytes": 202752,
+      "collision": "platform box plus a smooth ramp over seven shallow steps",
+      "interaction": "release river lantern"
+    },
+    {
+      "id": "model-river-lantern-fish",
+      "file": "models/model-river-lantern-fish.glb",
+      "collection": "SYR_model-river-lantern-fish",
+      "position_blender": [
+        132.0,
+        -3.0,
+        0.05999999865889549
+      ],
+      "position_yup": [
+        132.0,
+        0.05999999865889549,
+        3.0
+      ],
+      "rotation_z_blender": 0.0,
+      "rotation_y_yup": 0.0,
+      "dimensions_local_m": [
+        2.287,
+        1.44,
+        0.957
+      ],
+      "triangles": 248,
+      "materials": [
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Vermilion"
+      ],
+      "dynamic_pivots": [],
+      "bytes": 8964,
+      "collision": "simple convex/box proxies recommended",
+      "origin_note": "local Z=0 at waterline"
+    },
+    {
+      "id": "model-river-lantern-lotus",
+      "file": "models/model-river-lantern-lotus.glb",
+      "collection": "SYR_model-river-lantern-lotus",
+      "position_blender": [
+        121.0,
+        -2.0,
+        0.05999999865889549
+      ],
+      "position_yup": [
+        121.0,
+        0.05999999865889549,
+        2.0
+      ],
+      "rotation_z_blender": 0.0,
+      "rotation_y_yup": 0.0,
+      "dimensions_local_m": [
+        0.96,
+        0.96,
+        0.405
+      ],
+      "triangles": 116,
+      "materials": [
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Vermilion"
+      ],
+      "dynamic_pivots": [],
+      "bytes": 7944,
+      "collision": "simple convex/box proxies recommended",
+      "origin_note": "local Z=0 at waterline"
+    },
+    {
+      "id": "model-river-lantern-paperboat",
+      "file": "models/model-river-lantern-paperboat.glb",
+      "collection": "SYR_model-river-lantern-paperboat",
+      "position_blender": [
+        126.0,
+        2.0,
+        0.05999999865889549
+      ],
+      "position_yup": [
+        126.0,
+        0.05999999865889549,
+        -2.0
+      ],
+      "rotation_z_blender": 0.0,
+      "rotation_y_yup": 0.0,
+      "dimensions_local_m": [
+        0.975,
+        0.416,
+        0.39
+      ],
+      "triangles": 44,
+      "materials": [
+        "SY_Lantern",
+        "SY_Paper"
+      ],
+      "dynamic_pivots": [],
+      "bytes": 4204,
+      "collision": "simple convex/box proxies recommended",
+      "origin_note": "local Z=0 at waterline"
+    },
+    {
+      "id": "model-riverbanks",
+      "file": "models/model-riverbanks.glb",
+      "collection": "SYR_model-riverbanks",
+      "position_blender": [
+        90.0,
+        0.0,
+        0.0
+      ],
+      "position_yup": [
+        90.0,
+        0.0,
+        -0.0
+      ],
+      "rotation_z_blender": 0.0,
+      "rotation_y_yup": 0.0,
+      "dimensions_local_m": [
+        314.88,
+        78.048,
+        7.815
+      ],
+      "triangles": 50366,
+      "materials": [
+        "SY_DarkWood",
+        "SY_Foliage",
+        "SY_Paper",
+        "SY_Plaster",
+        "SY_Roof",
+        "SY_Stone",
+        "SY_Wood"
+      ],
+      "dynamic_pivots": [],
+      "bytes": 2946964,
+      "collision": "simple convex/box proxies recommended"
+    },
+    {
+      "id": "model-shop-01",
+      "file": "models/model-shop-01.glb",
+      "collection": "SYR_model-shop-01",
+      "position_blender": [
+        34.0,
+        25.0,
+        0.5799999833106995
+      ],
+      "position_yup": [
+        34.0,
+        0.5799999833106995,
+        -25.0
+      ],
+      "rotation_z_blender": 0.0,
+      "rotation_y_yup": 0.0,
+      "dimensions_local_m": [
+        10.551,
+        9.275,
+        5.944
+      ],
+      "triangles": 9386,
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Plaster",
+        "SY_Roof",
+        "SY_Stone",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "dynamic_pivots": [],
+      "bytes": 450916,
+      "collision": "exterior shell boxes and column proxies; ground-floor door is decorative, no interior"
+    },
+    {
+      "id": "model-shop-02",
+      "file": "models/model-shop-02.glb",
+      "collection": "SYR_model-shop-02",
+      "position_blender": [
+        48.0,
+        25.0,
+        0.5799999833106995
+      ],
+      "position_yup": [
+        48.0,
+        0.5799999833106995,
+        -25.0
+      ],
+      "rotation_z_blender": 0.0,
+      "rotation_y_yup": 0.0,
+      "dimensions_local_m": [
+        11.551,
+        9.775,
+        8.994
+      ],
+      "triangles": 12002,
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Plaster",
+        "SY_Roof",
+        "SY_Stone",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "dynamic_pivots": [],
+      "bytes": 577788,
+      "collision": "exterior shell boxes and column proxies; ground-floor door is decorative, no interior"
+    },
+    {
+      "id": "model-shop-03",
+      "file": "models/model-shop-03.glb",
+      "collection": "SYR_model-shop-03",
+      "position_blender": [
+        62.0,
+        25.0,
+        0.5799999833106995
+      ],
+      "position_yup": [
+        62.0,
+        0.5799999833106995,
+        -25.0
+      ],
+      "rotation_z_blender": 0.0,
+      "rotation_y_yup": 0.0,
+      "dimensions_local_m": [
+        11.051,
+        8.775,
+        5.944
+      ],
+      "triangles": 9530,
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Plaster",
+        "SY_Roof",
+        "SY_Stone",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "dynamic_pivots": [],
+      "bytes": 454932,
+      "collision": "exterior shell boxes and column proxies; ground-floor door is decorative, no interior"
+    },
+    {
+      "id": "model-shop-04",
+      "file": "models/model-shop-04.glb",
+      "collection": "SYR_model-shop-04",
+      "position_blender": [
+        76.0,
+        25.0,
+        0.5799999833106995
+      ],
+      "position_yup": [
+        76.0,
+        0.5799999833106995,
+        -25.0
+      ],
+      "rotation_z_blender": 0.0,
+      "rotation_y_yup": 0.0,
+      "dimensions_local_m": [
+        12.051,
+        9.775,
+        8.994
+      ],
+      "triangles": 11658,
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Plaster",
+        "SY_Roof",
+        "SY_Stone",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "dynamic_pivots": [],
+      "bytes": 569204,
+      "collision": "exterior shell boxes and column proxies; ground-floor door is decorative, no interior"
+    },
+    {
+      "id": "model-shop-05",
+      "file": "models/model-shop-05.glb",
+      "collection": "SYR_model-shop-05",
+      "position_blender": [
+        114.0,
+        25.0,
+        0.5799999833106995
+      ],
+      "position_yup": [
+        114.0,
+        0.5799999833106995,
+        -25.0
+      ],
+      "rotation_z_blender": 0.0,
+      "rotation_y_yup": 0.0,
+      "dimensions_local_m": [
+        10.551,
+        9.275,
+        5.944
+      ],
+      "triangles": 9682,
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Plaster",
+        "SY_Roof",
+        "SY_Stone",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "dynamic_pivots": [],
+      "bytes": 460380,
+      "collision": "exterior shell boxes and column proxies; ground-floor door is decorative, no interior"
+    },
+    {
+      "id": "model-shop-06",
+      "file": "models/model-shop-06.glb",
+      "collection": "SYR_model-shop-06",
+      "position_blender": [
+        151.0,
+        26.0,
+        0.5799999833106995
+      ],
+      "position_yup": [
+        151.0,
+        0.5799999833106995,
+        -26.0
+      ],
+      "rotation_z_blender": 0.0,
+      "rotation_y_yup": 0.0,
+      "dimensions_local_m": [
+        15.201,
+        15.125,
+        9.294
+      ],
+      "triangles": 18854,
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Plaster",
+        "SY_Roof",
+        "SY_Stone",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "dynamic_pivots": [],
+      "bytes": 854468,
+      "collision": "exterior shell boxes and column proxies; ground-floor door is decorative, no interior"
+    },
+    {
+      "id": "model-skiff",
+      "file": "models/model-skiff.glb",
+      "collection": "SYR_model-skiff",
+      "position_blender": [
+        154.0,
+        4.0,
+        0.029999999329447746
+      ],
+      "position_yup": [
+        154.0,
+        0.029999999329447746,
+        -4.0
+      ],
+      "rotation_z_blender": 0.0,
+      "rotation_y_yup": 0.0,
+      "dimensions_local_m": [
+        5.5,
+        2.192,
+        1.225
+      ],
+      "triangles": 376,
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "dynamic_pivots": [],
+      "bytes": 22384,
+      "collision": "simple convex/box proxies recommended",
+      "origin_note": "local Z=0 at waterline"
+    },
+    {
+      "id": "model-stall-riddle",
+      "file": "models/model-stall-riddle.glb",
+      "collection": "SYR_model-stall-riddle",
+      "position_blender": [
+        67.0,
+        13.800000190734863,
+        0.5799999833106995
+      ],
+      "position_yup": [
+        67.0,
+        0.5799999833106995,
+        -13.800000190734863
+      ],
+      "rotation_z_blender": 0.0,
+      "rotation_y_yup": 0.0,
+      "dimensions_local_m": [
+        5.315,
+        3.529,
+        2.81
+      ],
+      "triangles": 2479,
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Stone",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "dynamic_pivots": [],
+      "bytes": 120008,
+      "collision": "simple convex/box proxies recommended",
+      "interaction": "riddle"
+    },
+    {
+      "id": "model-stall-tea",
+      "file": "models/model-stall-tea.glb",
+      "collection": "SYR_model-stall-tea",
+      "position_blender": [
+        133.0,
+        25.0,
+        0.5799999833106995
+      ],
+      "position_yup": [
+        133.0,
+        0.5799999833106995,
+        -25.0
+      ],
+      "rotation_z_blender": 0.0,
+      "rotation_y_yup": 0.0,
+      "dimensions_local_m": [
+        4.915,
+        3.929,
+        2.8
+      ],
+      "triangles": 2295,
+      "materials": [
+        "SY_DarkWood",
+        "SY_Gold",
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Stone",
+        "SY_Vermilion",
+        "SY_Wood"
+      ],
+      "dynamic_pivots": [],
+      "bytes": 97408,
+      "collision": "simple convex/box proxies recommended",
+      "interaction": "tea-rest"
+    },
+    {
+      "id": "model-water",
+      "file": "models/model-water.glb",
+      "collection": "SYR_model-water",
+      "position_blender": [
+        90.0,
+        0.0,
+        0.0
+      ],
+      "position_yup": [
+        90.0,
+        0.0,
+        -0.0
+      ],
+      "rotation_z_blender": 0.0,
+      "rotation_y_yup": 0.0,
+      "dimensions_local_m": [
+        180.0,
+        24.0,
+        0.311
+      ],
+      "triangles": 4448,
+      "materials": [
+        "SY_Lantern",
+        "SY_Paper",
+        "SY_Reflection",
+        "SY_Vermilion",
+        "SY_Water"
+      ],
+      "dynamic_pivots": [],
+      "bytes": 216796,
+      "collision": "simple convex/box proxies recommended"
+    }
+  ]
+}
