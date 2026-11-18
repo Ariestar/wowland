@@ -1,26 +1,23 @@
 {
-  "name": "shangyuan-lantern-night",
+  "name": "wowland",
   "private": true,
   "version": "0.1.0",
-  "description": "上元灯夜：一个可以走进去的宋代水城上元灯会（网页预览）",
+  "packageManager": "pnpm@12.22.0",
   "scripts": {
-    "dev": "next dev --hostname 127.0.0.1 --port 3000",
-    "build": "next build",
-    "start": "next start --hostname 127.0.0.1 --port 3000",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "next": "^16.3.6",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "three": "^0.183.2"
+    "dev": "pnpm --filter @wowland/web dev",
+    "build": "pnpm --filter @wowland/web build",
+    "start": "pnpm --filter @wowland/web start",
+    "typecheck": "pnpm --filter @wowland/web typecheck",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "fix": "biome check --write .",
+    "check": "pnpm typecheck && pnpm lint",
+    "verify": "pnpm check && pnpm build",
+    "verify:visual": "pnpm --filter @wowland/web exec node scripts/shangyuan/capture.cjs",
+    "verify:flow": "pnpm --filter @wowland/web exec node scripts/shangyuan/playtest.cjs",
+    "verify:mobile": "pnpm --filter @wowland/web exec node scripts/shangyuan/mobile.cjs"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
-    "@types/node": "^24.10.1",
-    "@types/react": "^19.2.5",
-    "@types/react-dom": "^19.2.3",
-    "@types/three": "^0.183.1",
-    "typescript": "~5.9.3"
+    "@biomejs/biome": "^2.6.8"
   }
 }

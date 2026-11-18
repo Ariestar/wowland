@@ -1,7 +1,20 @@
-node_modules
-.next
-next-env.d.ts
+node_modules/
+.next/
+out/
+dist/
+build/
 *.tsbuildinfo
-test-results
+next-env.d.ts
+test-results/
+playwright-report/
+.playwright-mcp/
+
+# Local captures and Blender backups
+sy-*.png
+sy-*.yml
 *.blend1
+packages/assets/**/renders/raw/
+packages/assets/**/renders/camera_test/
+
 .DS_Store
+Thumbs.db

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>上元灯夜</title>
+  <rect width="64" height="64" rx="14" fill="#0d1020"/>
+  <path d="M32 8v7" stroke="#d8b45a" stroke-width="3" stroke-linecap="round"/>
+  <rect x="21" y="15" width="22" height="5" rx="2" fill="#d8b45a"/>
+  <path d="M22 21h20l3 27H19z" fill="#ff9a54"/>
+  <path d="M26 21v27M32 21v27M38 21v27" stroke="#a83b28" stroke-width="2" opacity=".65"/>
+  <rect x="17" y="47" width="30" height="5" rx="2" fill="#d8b45a"/>
+  <path d="M32 52v6" stroke="#d8b45a" stroke-width="2" stroke-linecap="round"/>
+</svg>
