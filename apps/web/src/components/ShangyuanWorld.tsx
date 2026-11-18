@@ -168,6 +168,7 @@ export default function ShangyuanWorld({ language }: Props) {
 
       {!entered && (
         <div className={s.gate}>
+          <div className={s.gateScene} aria-hidden />
           <p className={s.kicker}>S1 · 入市</p>
           <h1 className={s.title}>{t.title}</h1>
           <p className={s.subtitle}>{t.subtitle}</p>

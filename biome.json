@@ -9,6 +9,7 @@
     "includes": [
       "apps/web/**",
       "!apps/web/scripts/shangyuan/wprefab",
+      "!apps/web/public",
       "package.json",
       "biome.json",
       "pnpm-workspace.yaml",

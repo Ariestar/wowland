@@ -1,0 +1,197 @@
+{
+  "kit": "SM_Env_LanternRiver_Kit",
+  "pieces": [
+    {
+      "source": "SM_Env_Shophouse_A_01",
+      "lod0_tris": 10096,
+      "lods": [
+        {
+          "name": "SM_Env_Shophouse_A_01_LOD1",
+          "ratio": 0.5,
+          "triangles": 5048,
+          "boundary_edges": 0,
+          "non_manifold_edges": 0,
+          "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Env_Shophouse_A_01_LOD1.glb",
+          "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Env_Shophouse_A_01_LOD1.fbx"
+        },
+        {
+          "name": "SM_Env_Shophouse_A_01_LOD2",
+          "ratio": 0.22,
+          "triangles": 2016,
+          "boundary_edges": 0,
+          "non_manifold_edges": 0,
+          "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Env_Shophouse_A_01_LOD2.glb",
+          "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Env_Shophouse_A_01_LOD2.fbx"
+        }
+      ]
+    },
+    {
+      "source": "SM_Env_Shophouse_B_01",
+      "lod0_tris": 12616,
+      "lods": [
+        {
+          "name": "SM_Env_Shophouse_B_01_LOD1",
+          "ratio": 0.5,
+          "triangles": 6308,
+          "boundary_edges": 0,
+          "non_manifold_edges": 0,
+          "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Env_Shophouse_B_01_LOD1.glb",
+          "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Env_Shophouse_B_01_LOD1.fbx"
+        },
+        {
+          "name": "SM_Env_Shophouse_B_01_LOD2",
+          "ratio": 0.22,
+          "triangles": 2426,
+          "boundary_edges": 0,
+          "non_manifold_edges": 0,
+          "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Env_Shophouse_B_01_LOD2.glb",
+          "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Env_Shophouse_B_01_LOD2.fbx"
+        }
+      ]
+    },
+    {
+      "source": "SM_Env_Shophouse_C_01",
+      "lod0_tris": 10416,
+      "lods": [
+        {
+          "name": "SM_Env_Shophouse_C_01_LOD1",
+          "ratio": 0.5,
+          "triangles": 5208,
+          "boundary_edges": 0,
+          "non_manifold_edges": 0,
+          "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Env_Shophouse_C_01_LOD1.glb",
+          "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Env_Shophouse_C_01_LOD1.fbx"
+        },
+        {
+          "name": "SM_Env_Shophouse_C_01_LOD2",
+          "ratio": 0.22,
+          "triangles": 2048,
+          "boundary_edges": 0,
+          "non_manifold_edges": 0,
+          "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Env_Shophouse_C_01_LOD2.glb",
+          "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Env_Shophouse_C_01_LOD2.fbx"
+        }
+      ]
+    },
+    {
+      "source": "SM_Env_Bridge_Arch_01",
+      "lod0_tris": 6756,
+      "lods": [
+        {
+          "name": "SM_Env_Bridge_Arch_01_LOD1",
+          "ratio": 0.5,
+          "triangles": 3378,
+          "boundary_edges": 0,
+          "non_manifold_edges": 0,
+          "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Env_Bridge_Arch_01_LOD1.glb",
+          "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Env_Bridge_Arch_01_LOD1.fbx"
+        },
+        {
+          "name": "SM_Env_Bridge_Arch_01_LOD2",
+          "ratio": 0.22,
+          "triangles": 1304,
+          "boundary_edges": 0,
+          "non_manifold_edges": 0,
+          "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Env_Bridge_Arch_01_LOD2.glb",
+          "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Env_Bridge_Arch_01_LOD2.fbx"
+        }
+      ]
+    },
+    {
+      "source": "SM_Env_LanternTower_01",
+      "lod0_tris": 19412,
+      "lods": [
+        {
+          "name": "SM_Env_LanternTower_01_LOD1",
+          "ratio": 0.5,
+          "triangles": 9252,
+          "boundary_edges": 0,
+          "non_manifold_edges": 0,
+          "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Env_LanternTower_01_LOD1.glb",
+          "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Env_LanternTower_01_LOD1.fbx"
+        },
+        {
+          "name": "SM_Env_LanternTower_01_LOD2",
+          "ratio": 0.22,
+          "triangles": 2936,
+          "boundary_edges": 0,
+          "non_manifold_edges": 0,
+          "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Env_LanternTower_01_LOD2.glb",
+          "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Env_LanternTower_01_LOD2.fbx"
+        }
+      ]
+    },
+    {
+      "source": "SM_Prop_LanternString_01",
+      "lod0_tris": 1624,
+      "lods": [
+        {
+          "name": "SM_Prop_LanternString_01_LOD1",
+          "ratio": 0.5,
+          "triangles": 812,
+          "boundary_edges": 0,
+          "non_manifold_edges": 0,
+          "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Prop_LanternString_01_LOD1.glb",
+          "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Prop_LanternString_01_LOD1.fbx"
+        },
+        {
+          "name": "SM_Prop_LanternString_01_LOD2",
+          "ratio": 0.22,
+          "triangles": 356,
+          "boundary_edges": 0,
+          "non_manifold_edges": 0,
+          "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Prop_LanternString_01_LOD2.glb",
+          "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Prop_LanternString_01_LOD2.fbx"
+        }
+      ]
+    },
+    {
+      "source": "SM_Prop_Stall_01",
+      "lod0_tris": 348,
+      "lods": [
+        {
+          "name": "SM_Prop_Stall_01_LOD1",
+          "ratio": 0.5,
+          "triangles": 168,
+          "boundary_edges": 0,
+          "non_manifold_edges": 0,
+          "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Prop_Stall_01_LOD1.glb",
+          "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Prop_Stall_01_LOD1.fbx"
+        },
+        {
+          "name": "SM_Prop_Stall_01_LOD2",
+          "ratio": 0.22,
+          "triangles": 62,
+          "boundary_edges": 0,
+          "non_manifold_edges": 0,
+          "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Prop_Stall_01_LOD2.glb",
+          "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Prop_Stall_01_LOD2.fbx"
+        }
+      ]
+    },
+    {
+      "source": "SM_Prop_Boat_Pleasure_01",
+      "lod0_tris": 6680,
+      "lods": [
+        {
+          "name": "SM_Prop_Boat_Pleasure_01_LOD1",
+          "ratio": 0.5,
+          "triangles": 3340,
+          "boundary_edges": 0,
+          "non_manifold_edges": 0,
+          "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Prop_Boat_Pleasure_01_LOD1.glb",
+          "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Prop_Boat_Pleasure_01_LOD1.fbx"
+        },
+        {
+          "name": "SM_Prop_Boat_Pleasure_01_LOD2",
+          "ratio": 0.22,
+          "triangles": 1392,
+          "boundary_edges": 0,
+          "non_manifold_edges": 0,
+          "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Prop_Boat_Pleasure_01_LOD2.glb",
+          "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\lod\\SM_Prop_Boat_Pleasure_01_LOD2.fbx"
+        }
+      ]
+    }
+  ]
+}

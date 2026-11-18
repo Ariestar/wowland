@@ -18,7 +18,7 @@ import json
 import math
 import os
 import random
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSET_DIR = os.path.dirname(HERE)
@@ -196,8 +196,8 @@ MAT_TOWER_GLOW = emission_material("MAT_SCENE_TowerGlow", "#FFC06A", 4.0)
 MAT_FIREWORK_GOLD = emission_material("MAT_SCENE_FireworkGold", "#FFD27A", 22.0)
 MAT_FIREWORK_ROSE = emission_material("MAT_SCENE_FireworkRose", "#FF6FA8", 22.0)
 MAT_FIREWORK_CYAN = emission_material("MAT_SCENE_FireworkCyan", "#7BE8FF", 22.0)
-MAT_BLOSSOM = principled("MAT_SCENE_Blossom", "#E894B8", roughness=0.7,
-                         bump=0.1, bump_scale=6)
+MAT_BLOSSOM = principled("MAT_SCENE_Blossom", "#B45E80", roughness=0.85,
+                         bump=0.04, bump_scale=6)
 MAT_TRUNK = principled("MAT_SCENE_Trunk", "#2A1A18", roughness=0.7, bump=0.25, bump_scale=8)
 MAT_PETAL = principled("MAT_SCENE_Petal", "#FFB7D4", roughness=0.5,
                        emission="#FF9CC4", emission_strength=0.25, alpha=0.9)
@@ -354,14 +354,15 @@ def new_from_mesh(name, mesh, material, location, rotation_z=0.0, scale=1.0,
 
 
 def instance_kit(src_name, new_name, location, rot_z=0.0, scale=1.0,
-                 collection=COL_BUILDINGS, scale_z=None):
+                 collection=COL_BUILDINGS, scale_z=None, scale_x=None):
     src = bpy.data.objects[src_name]
     obj = bpy.data.objects.new(new_name, src.data)
     collection.objects.link(obj)
     obj.location = location
     obj.rotation_euler = (0, 0, rot_z)
+    sx = scale if scale_x is None else scale_x
     sz = scale if scale_z is None else scale_z
-    obj.scale = (scale, scale, sz)
+    obj.scale = (sx, scale, sz)
     return obj
 
 
@@ -514,11 +515,19 @@ def mountain_ring(name, radius, base_z, h_min, h_max, material, offset=0.0,
 # Ground, water, quays
 # ---------------------------------------------------------------------------
 
-RIVER_HALF = 24.0
+# A canal, not a harbour.  The reference render reads as a narrow water street
+# with room to walk both banks, so the channel is 25 m across and the paved
+# promenade in front of the shopfronts is 7.5 m wide.
+RIVER_HALF = 12.5
+PROMENADE = 7.5
 GROUND_Z = 1.2
 BRIDGE_Y = 10.0
 TOWER_Y = 78.0
 PAVILION_Y = 62.0
+# The kit bridge spans 47.3 m.  Compress X so it lands on the promenade instead
+# of the shop wall; the deck profile and its height stay as authored.
+BRIDGE_HALF = 17.5
+BRIDGE_KIT_HALF = 23.63
 
 build_sky()
 mountain_ring("ENV_Mountains_Far", 900, 0, 30, 62, MAT_MOUNTAIN_FAR, offset=0.4)
@@ -560,27 +569,126 @@ for y in (-48.0, 118.0):
 # Bridge abutments.
 for side in (-1, 1):
     add_box(f"ENV_BridgeAbutment_{side}", (4.0, 9.0, 1.4),
-            (side * 23.6, BRIDGE_Y, 0.7), MAT_QUAY, COL_BANKS)
+            (side * BRIDGE_HALF, BRIDGE_Y, 0.7), MAT_QUAY, COL_BANKS)
+
+# ---------------------------------------------------------------------------
+# Authored asset sources (Shangyuan shops and stalls)
+# ---------------------------------------------------------------------------
+
+COL_SOURCES = new_collection("COL_Sources", COL_ROOT)
+SHANGYUAN_MODELS = os.path.join(os.path.dirname(ASSET_DIR), "shangyuan", "models")
+
+
+def unify_materials(objects):
+    """Share one datablock per authored material name across imports.
+
+    Every GLB carries its own copy of the SY_* materials.  Left alone, six shop
+    imports would become six identically named sets and six copies of every
+    texture in the export; remapping to the first copy keeps one set.
+    """
+    for obj in objects:
+        for slot in obj.material_slots:
+            material = slot.material
+            if material is None:
+                continue
+            base = material.name.split(".")[0]
+            existing = bpy.data.materials.get(base)
+            if existing is not None and existing is not material:
+                slot.material = existing
+                bpy.data.materials.remove(material, do_unlink=True)
+
+
+def import_source(filename, name):
+    """Import one authored GLB and join it into a hidden, centred mesh source.
+
+    The source is kept out of the exported collections and reused through
+    `instance_kit`, the same way the kit masters are.
+    """
+    path = os.path.join(SHANGYUAN_MODELS, filename)
+    if not os.path.exists(path):
+        print("LR_MISSING_SOURCE", path)
+        return None
+    bpy.ops.object.select_all(action="DESELECT")
+    bpy.ops.import_scene.gltf(filepath=path)
+    meshes = [obj for obj in bpy.context.selected_objects if obj.type == "MESH"]
+    if not meshes:
+        return None
+    # Signs are parented to the body; bake the parent transform so the join and
+    # every later instance share one clean origin.
+    for obj in meshes:
+        world = obj.matrix_world.copy()
+        obj.parent = None
+        obj.matrix_world = world
+        move_to_collection(obj, COL_SOURCES)
+    bpy.ops.object.select_all(action="DESELECT")
+    for obj in meshes:
+        obj.select_set(True)
+    bpy.context.view_layer.objects.active = meshes[0]
+    if len(meshes) > 1:
+        bpy.ops.object.join()
+    source = bpy.context.view_layer.objects.active
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    unify_materials([source])
+    # Centre the footprint on the origin and drop the base to z = 0 so a
+    # placement is just (x, y, ground) for every source.
+    low = Vector((min(c[i] for c in source.bound_box) for i in range(3)))
+    high = Vector((max(c[i] for c in source.bound_box) for i in range(3)))
+    offset = Vector((-(low.x + high.x) / 2, -(low.y + high.y) / 2, -low.z))
+    for vertex in source.data.vertices:
+        vertex.co += offset
+    source.data.update()
+    source.name = name
+    source.data.name = name
+    source.hide_render = True
+    source.hide_set(True)
+    return source
+
+
+SHOP_SOURCES = [
+    "model-shop-01", "model-shop-02", "model-shop-03",
+    "model-shop-04", "model-shop-05", "model-shop-06",
+]
+for index, filename in enumerate(SHOP_SOURCES):
+    import_source(filename + ".glb", f"SRC_Shop_{index + 1:02d}")
+import_source("model-stall-riddle.glb", "SRC_Stall_Riddle")
+import_source("model-stall-tea.glb", "SRC_Stall_Tea")
 
 # ---------------------------------------------------------------------------
 # Buildings
 # ---------------------------------------------------------------------------
 
-def shophouse_dims(name):
+def footprint_dims(name):
     src = bpy.data.objects[name]
     return src.dimensions.x, src.dimensions.y
 
 
 def place_row(side, y_start, y_end, gap_zones, prefix):
-    """Fill one bank with linked kit shophouses, facade on the river line."""
-    variants = ["SM_Env_Shophouse_A_01", "SM_Env_Shophouse_B_01",
-                "SM_Env_Shophouse_C_01"]
+    """Fill one bank with linked shophouses, facade on the river line.
+
+    The kit's three variants are mixed with the six authored Shangyuan
+    shopfronts so the street has nine rooflines, signboards and storey
+    combinations instead of three repeating bays.
+    """
+    variants = [
+        ("SM_Env_Shophouse_A_01", 0.14),
+        ("SM_Env_Shophouse_B_01", 0.10),
+        ("SM_Env_Shophouse_C_01", 0.12),
+        ("SRC_Shop_01", 0.10),
+        ("SRC_Shop_02", 0.12),
+        ("SRC_Shop_03", 0.08),
+        ("SRC_Shop_04", 0.11),
+        ("SRC_Shop_05", 0.09),
+        ("SRC_Shop_06", 0.14),
+    ]
+    variants = [(name, weight) for name, weight in variants if bpy.data.objects.get(name)]
+    names = [name for name, _ in variants]
+    weights = [weight for _, weight in variants]
     rng = random.Random(SEED + (11 if side > 0 else 29))
     y = y_start
     idx = 0
     while y < y_end:
-        name = variants[rng.choices(range(3), weights=[0.42, 0.28, 0.30])[0]]
-        width, depth = shophouse_dims(name)
+        name = rng.choices(names, weights=weights)[0]
+        width, depth = footprint_dims(name)
         center_y = y + width / 2.0
         if center_y + width / 2.0 > y_end:
             break
@@ -589,104 +697,250 @@ def place_row(side, y_start, y_end, gap_zones, prefix):
             y += 2.4
             continue
         rot = -math.pi / 2 if side > 0 else math.pi / 2
-        facade_x = side * (RIVER_HALF + 2.0)
+        # The promenade is part of the level: the shopfronts sit PROMENADE
+        # metres back from the water so there is a walkable street.
+        facade_x = side * (RIVER_HALF + PROMENADE)
         center_x = facade_x + side * depth / 2.0
         z_scale = rng.uniform(0.94, 1.10)
-        obj = instance_kit(name, f"{prefix}_{idx:02d}", (center_x, center_y, GROUND_Z),
-                           rot_z=rot, scale=1.0, scale_z=z_scale)
+        instance_kit(name, f"{prefix}_{idx:02d}", (center_x, center_y, GROUND_Z),
+                     rot_z=rot, scale=1.0, scale_z=z_scale)
         idx += 1
         y += width + rng.uniform(0.3, 1.3)
     return idx
 
 
-place_row(1, -140.0, 180.0, [(-2.0, 22.0), (46.0, 82.0)], "BLD_R")
+place_row(1, -140.0, 180.0, [(-2.0, 22.0), (28.0, 84.0)], "BLD_R")
 place_row(-1, -140.0, 180.0, [(-2.0, 22.0)], "BLD_L")
+
+# The bridge landing leaves a wide hole in both rows.  Two shophouses per bank
+# frame the bridgehead and bring the street back down to the water.
+for side, sources in (
+    (1, (("SRC_Shop_03", 0.0), ("SRC_Shop_01", 19.2))),
+    (-1, (("SRC_Shop_01", 0.0), ("SRC_Shop_03", 19.2))),
+):
+    for index, (source, y) in enumerate(sources):
+        if bpy.data.objects.get(source) is None:
+            continue
+        _, depth = footprint_dims(source)
+        facade_x = side * (RIVER_HALF + PROMENADE)
+        instance_kit(source, f"BLD_{'R' if side > 0 else 'L'}_Bridge_{index}",
+                     (facade_x + side * depth / 2.0, y, GROUND_Z),
+                     rot_z=-math.pi / 2 if side > 0 else math.pi / 2,
+                     scale_z=1.04, collection=COL_BUILDINGS)
+
+# ---------------------------------------------------------------------------
+# Pavilion square: a grand restaurant closes the south side and a three-house
+# terrace walls the east side, so the square reads as a real market courtyard
+# instead of a gap in the shop row.
+# ---------------------------------------------------------------------------
+
+# Two-storey restaurant set back from the shop line, leaving a forecourt for
+# its lanterns and a side lane into the square.
+PLAZA_SOUTH_X = 31.0
+PLAZA_SOUTH_Y = 39.0
+restaurant = instance_kit("SRC_Shop_06", "BLD_R_Restaurant_00",
+                          (PLAZA_SOUTH_X, PLAZA_SOUTH_Y, GROUND_Z),
+                          rot_z=-math.pi / 2, collection=COL_BUILDINGS)
+restaurant.scale = (1.0, 1.08, 1.08)
+
+# Terrace along the back of the square, facing the pavilion across the stone.
+PLAZA_BACK_X = 38.5
+for index, (source, y, z_scale) in enumerate((
+    ("SRC_Shop_01", 52.6, 1.02),
+    ("SRC_Shop_02", 64.4, 1.06),
+    ("SRC_Shop_06", 79.2, 0.98),
+)):
+    if bpy.data.objects.get(source) is None:
+        continue
+    _, depth = footprint_dims(source)
+    instance_kit(source, f"BLD_R_PlazaBack_{index:02d}",
+                 (PLAZA_BACK_X + depth / 2.0, y, GROUND_Z),
+                 rot_z=-math.pi / 2, scale_z=z_scale, collection=COL_BUILDINGS)
 
 # Bridge.
 bridge = instance_kit("SM_Env_Bridge_Arch_01", "LM_Bridge_Arch", (0, BRIDGE_Y, 0.0),
-                      collection=COL_LANDMARKS)
+                      scale_x=BRIDGE_HALF / BRIDGE_KIT_HALF, collection=COL_LANDMARKS)
 
 # Lantern tower on its stone island, scaled up as the visual anchor.
 tower = instance_kit("SM_Env_LanternTower_01", "LM_Lantern_Tower", (0, TOWER_Y, 0.0),
-                     scale=1.4, collection=COL_LANDMARKS)
+                     scale=1.25, collection=COL_LANDMARKS)
 
 # Existing pavilion on the right-bank plaza, facing the river.
 pavilion = append_object(PAVILION_BLEND, "SM_Env_Pavilion_Hex_01", COL_LANDMARKS)
 pavilion.name = "LM_Pavilion_Hex"
-pavilion.location = (35.0, PAVILION_Y, GROUND_Z)
+pavilion.location = (30.5, PAVILION_Y, GROUND_Z)
 pavilion.rotation_euler = (0, 0, -math.pi / 2)
 pavilion.scale = (1.45, 1.45, 1.45)
 
-# Stone plaza in front of the pavilion.
+# Stone plaza in front of the pavilion, opening off the promenade.
 add_box("ENV_PavilionPlaza", (18.0, 28.0, 0.10),
-        (34.0, PAVILION_Y, GROUND_Z + 0.05),
+        (29.5, PAVILION_Y, GROUND_Z + 0.05),
         bpy.data.materials["MAT_LR_Stone_Light"], COL_BANKS)
 for i in range(3):
     add_box(f"ENV_PlazaStep_{i}", (0.65, 20.0 - i * 1.4, 0.09),
-            (RIVER_HALF + 2.0 + i * 0.65, PAVILION_Y, GROUND_Z - 0.02 - i * 0.09),
+            (RIVER_HALF + PROMENADE + 0.2 + i * 0.65, PAVILION_Y,
+             GROUND_Z - 0.02 - i * 0.09),
             MAT_QUAY, COL_BANKS)
 
-# Two palace lanterns flanking the pavilion.
+# Ceremonial gate at the street entrance, reusing the original Shangyuan asset.
+# It is centred on the promenade; its width is compressed while its height keeps
+# a 2.2 m clearance, so it frames the street without becoming a barrier.
+PAIFANG_SOURCE = os.path.join(os.path.dirname(ASSET_DIR), "shangyuan", "models",
+                              "model-paifang.glb")
+PAIFANG_SCALE = 0.36
+PAIFANG_HEIGHT = 0.8
+PAIFANG_X = RIVER_HALF + PROMENADE * 0.5
+if os.path.exists(PAIFANG_SOURCE):
+    bpy.ops.import_scene.gltf(filepath=PAIFANG_SOURCE)
+    imported = [obj for obj in bpy.context.selected_objects if obj.type == "MESH"]
+    for obj in imported:
+        move_to_collection(obj, COL_LANDMARKS)
+    # The gate carries its own copy of the SY_* materials; share the set the
+    # shops already imported so the export keeps one texture per material.
+    unify_materials(imported)
+    # The sign is parented to the gate; transform only the root so it is not
+    # moved twice by the inherited parent matrix.
+    roots = [obj for obj in imported if obj.parent is None or obj.parent not in imported]
+    transform = (
+        Matrix.Translation((PAIFANG_X, -120.0, GROUND_Z))
+        @ Matrix.Rotation(math.pi / 2, 4, "Z")
+        @ Matrix.Diagonal(Vector((PAIFANG_SCALE, PAIFANG_SCALE, PAIFANG_HEIGHT, 1.0)))
+    )
+    for obj in roots:
+        obj.matrix_world = transform @ obj.matrix_world
+    for obj in imported:
+        if obj.name.startswith("model-paifang"):
+            obj.name = "LM_Paifang"
+        elif "Sign" in obj.name:
+            obj.name = "LM_Paifang_Sign"
+        for slot in obj.material_slots:
+            material = slot.material
+            if material is None or material.name != "SY_Lantern" or not material.use_nodes:
+                continue
+            for node in material.node_tree.nodes:
+                if node.type == "BSDF_PRINCIPLED":
+                    node.inputs["Emission Strength"].default_value = 1.5
+else:
+    print("LR_MISSING_PAIFANG", PAIFANG_SOURCE)
+
+# Palace lanterns hang from their top ring, so each pair needs a timber stand;
+# placed on the ground their bodies would sink under the paving.
 for i, y in enumerate((PAVILION_Y - 4.6, PAVILION_Y + 4.6)):
+    add_cylinder(f"PROP_PalaceLantern_{i}_Post", 8, 0.07, 3.9,
+                 (25.7, y, GROUND_Z + 1.95),
+                 bpy.data.materials["MAT_LR_Wood_Dark"], COL_PROPS)
+    add_box(f"PROP_LanternArm_Pavilion_{i}", (0.95, 0.09, 0.09),
+            (26.15, y, GROUND_Z + 3.86),
+            bpy.data.materials["MAT_LR_Wood_Dark"], COL_PROPS)
     lantern = append_object(LANTERN_BLEND, "SM_PalaceLantern_6S", COL_PROPS)
     lantern.name = f"PROP_PalaceLantern_{i}"
-    lantern.location = (30.2, y, GROUND_Z)
+    lantern.location = (26.6, y, GROUND_Z + 3.8)
     lantern.scale = (1.35, 1.35, 1.35)
-    add_point_light(f"LGT_PalaceLantern_{i}", (30.2, y, GROUND_Z + 1.4),
+    add_point_light(f"LGT_PalaceLantern_{i}", (26.6, y, GROUND_Z + 2.5),
                     "#FFB066", 60.0, 0.4)
 
-# Market stalls along both quays.
+# The restaurant entrance repeats the same lantern through the shared mesh, so
+# the export keeps one material set for all four.
+for i, y in enumerate((35.6, 42.4)):
+    add_cylinder(f"PROP_RestaurantLantern_{i}_Post", 8, 0.065, 3.5,
+                 (21.2, y, GROUND_Z + 1.75),
+                 bpy.data.materials["MAT_LR_Wood_Dark"], COL_PROPS)
+    add_box(f"PROP_LanternArm_Restaurant_{i}", (0.9, 0.08, 0.08),
+            (21.65, y, GROUND_Z + 3.46),
+            bpy.data.materials["MAT_LR_Wood_Dark"], COL_PROPS)
+    instance_kit("PROP_PalaceLantern_0", f"PROP_RestaurantLantern_{i}",
+                 (22.1, y, GROUND_Z + 3.4), collection=COL_PROPS, scale=1.2)
+    add_point_light(f"LGT_RestaurantLantern_{i}", (22.1, y, GROUND_Z + 2.25),
+                    "#FFB066", 45.0, 0.4)
+
+# Market stalls.  The interactive ones reuse the authored Shangyuan stall
+# models — the riddle stall carries hanging riddle slips and a board, the tea
+# stall a stove, cups and jars — instead of the kit's generic four-post awning.
+# Each backs onto the shopfronts so the promenade keeps a clear walking lane.
+STALL_SOURCES = {
+    "riddle": "SRC_Stall_Riddle",
+    "tea": "SRC_Stall_Tea",
+}
+# The two authored stalls alternate along both banks.  Their lanterns, signs,
+# goods and counters are lit geometry, so every stall reads at night instead of
+# turning into a dark box.
 stall_specs = [
-    (1, -86.0, 0.0), (1, -18.0, 0.0), (1, 40.0, 0.0), (1, 128.0, 0.0),
-    (-1, -70.0, 0.0), (-1, 26.0, 0.0), (-1, 104.0, 0.0), (-1, 150.0, 0.0),
+    (1, 40.0, "riddle"), (1, 118.0, "tea"), (-1, 26.0, "tea"),
+    (1, -86.0, "riddle"), (1, -18.0, "tea"), (-1, -70.0, "riddle"),
+    (-1, 150.0, "tea"), (1, 96.0, "riddle"), (1, 148.0, "tea"),
+    (1, -40.0, "riddle"), (1, -66.0, "tea"), (1, 128.0, "riddle"),
+    (-1, 62.0, "tea"), (-1, 100.0, "tea"), (-1, -30.0, "riddle"),
+    (-1, -112.0, "tea"), (-1, -130.0, "riddle"), (-1, -96.0, "tea"),
+    (-1, 132.0, "riddle"),
 ]
-for i, (side, y, _) in enumerate(stall_specs):
+for i, (side, y, kind) in enumerate(stall_specs):
+    source = STALL_SOURCES[kind]
+    if bpy.data.objects.get(source) is None:
+        continue
     rot = -math.pi / 2 if side > 0 else math.pi / 2
-    instance_kit("SM_Prop_Stall_01", f"PROP_Stall_{i}",
-                 (side * (RIVER_HALF + 1.4), y, GROUND_Z), rot_z=rot,
-                 collection=COL_PROPS)
+    _, depth = footprint_dims(source)
+    facade_x = side * (RIVER_HALF + PROMENADE)
+    center_x = facade_x - side * (depth / 2.0 + 0.15)
+    instance_kit(source, f"PROP_Stall_{i}", (center_x, y, GROUND_Z),
+                 rot_z=rot, collection=COL_PROPS)
+
+# Two tea stalls flank the approach to the pavilion, keeping its axis open.
+for i, (kind, y) in enumerate((("tea", 56.5), ("tea", 72.0))):
+    source = STALL_SOURCES[kind]
+    if bpy.data.objects.get(source) is None:
+        continue
+    instance_kit(source, f"PROP_Stall_Plaza_{i}", (23.0, y, GROUND_Z),
+                 rot_z=math.pi / 2, collection=COL_PROPS)
 
 # Quay lantern posts: human-scale warmth and a rhythm along both banks.
 def quay_post(side, y, index):
-    px = side * (RIVER_HALF - 0.55)
-    add_cylinder(f"PROP_QuayPost_{side}_{index}", 8, 0.075, 3.4,
-                 (px, y, GROUND_Z + 1.7), bpy.data.materials["MAT_LR_Wood_Dark"],
+    px = side * (RIVER_HALF + 0.35)
+    add_cylinder(f"PROP_QuayPost_{side}_{index}", 8, 0.075, 3.8,
+                 (px, y, GROUND_Z + 1.9), bpy.data.materials["MAT_LR_Wood_Dark"],
                  COL_PROPS)
+    # The arm reaches inland so the lantern lights the promenade it stands on.
     add_box(f"PROP_QuayArm_{side}_{index}", (0.9, 0.10, 0.10),
-            (px - side * 0.40, y, GROUND_Z + 3.36),
+            (px + side * 0.40, y, GROUND_Z + 3.74),
             bpy.data.materials["MAT_LR_Wood_Dark"], COL_PROPS)
     lantern = instance_kit("SM_Prop_Lantern_Hung_01", f"PROP_QuayLantern_{side}_{index}",
-                           (px - side * 0.80, y, GROUND_Z + 3.34),
+                           (px + side * 0.80, y, GROUND_Z + 3.70),
                            collection=COL_PROPS, scale=0.85)
     if lantern.material_slots:
         lantern.material_slots[0].material = MAT_QUAY_LANTERN
     return lantern
 
 
+QUAY_POST_Y = (-118.0, -88.0, -58.0, -28.0, 26.0, 56.0, 86.0, 126.0, 156.0)
 for side in (-1, 1):
-    for j, y in enumerate((-118.0, -88.0, -58.0, -28.0, 26.0, 56.0, 86.0, 126.0, 156.0)):
+    for j, y in enumerate(QUAY_POST_Y):
         quay_post(side, y, j)
 
 # ---------------------------------------------------------------------------
-# Lantern strings across the river
+# Lantern strings
 # ---------------------------------------------------------------------------
 
-def river_string(name, y, height=10.4, sag=2.4, spacing=1.55, red_lanterns=True):
-    span = RIVER_HALF * 2.0
+def river_string(name, y, height=5.2, sag=1.7, spacing=1.55, red_lanterns=True):
+    """One string across the whole street, tied into the shopfronts.
+
+    The ends land on the facades at 5.2 m, under the shortest eave, so the wire
+    reads as hung between buildings instead of floating above the roofs.
+    """
+    edge = RIVER_HALF + PROMENADE + 0.05
+    span = edge * 2.0
     count = max(8, int(span / spacing))
     pts = []
     for i in range(count + 1):
         t = i / count
-        x = -RIVER_HALF + span * t
+        x = -edge + span * t
         z = height - sag * 4 * t * (1 - t)
         pts.append((x, y, z))
     add_curve_tube(name + "_Wire", pts, 0.012, bpy.data.materials["MAT_LR_Wood_Dark"],
                    COL_PROPS, resolution_u=2, bevel_resolution=1)
     for i in range(1, count):
         t = i / count
-        x = -RIVER_HALF + span * t
+        x = -edge + span * t
         z = height - sag * 4 * t * (1 - t) - 0.14
-        if red_lanterns and i % 7 == 3:
+        if red_lanterns and i % 9 == 4:
             add_sphere(f"{name}_Red_{i}", 0.26, (x, y, z - 0.12), MAT_BULB_RED,
                        COL_PROPS, segments=8, rings=4, scale=(1.0, 1.0, 1.25))
         else:
@@ -694,23 +948,27 @@ def river_string(name, y, height=10.4, sag=2.4, spacing=1.55, red_lanterns=True)
                        COL_PROPS, segments=8, rings=4)
 
 
-for i, y in enumerate((-56.0, -16.0, 34.0, 76.0, 118.0, 152.0)):
-    river_string(f"PROP_RiverString_{i}", y, height=10.6 if y < 0 else 11.4,
-                 sag=2.3 + (i % 2) * 0.4)
+# Pick y values that sit inside a shophouse on both banks, clear of the bridge
+# and the tower island.
+for i, y in enumerate((-96.0, -60.0, -15.0, 20.0, 89.0, 115.0, 149.0)):
+    river_string(f"PROP_RiverString_{i}", y, height=5.2 + (i % 2) * 0.18)
 
-# Street-side strings between facades on each bank.
+# Low strings between the quay posts: supported at both ends, and high enough
+# to keep the lanterns above head height along the promenade.
 for side in (-1, 1):
-    for j, y in enumerate((-100.0, -42.0, 52.0, 132.0)):
-        x0 = side * (RIVER_HALF + 2.4)
-        x1 = side * (RIVER_HALF + 9.0)
-        pts = [(x0, y, 8.6), ((x0 + x1) / 2, y, 7.7), (x1, y, 8.6)]
-        add_curve_tube(f"PROP_StreetWire_{side}_{j}", pts, 0.011,
+    x = side * (RIVER_HALF + 0.35)
+    for j, (a, b) in enumerate(zip(QUAY_POST_Y, QUAY_POST_Y[1:])):
+        sag = 0.32
+        pts = [(x, a, GROUND_Z + 3.80), (x, (a + b) / 2, GROUND_Z + 3.80 - sag),
+               (x, b, GROUND_Z + 3.80)]
+        add_curve_tube(f"PROP_BankWire_{side}_{j}", pts, 0.011,
                        bpy.data.materials["MAT_LR_Wood_Dark"], COL_PROPS)
-        for k in range(5):
-            t = (k + 1) / 6.0
-            xx = x0 + (x1 - x0) * t
-            zz = 8.6 - 0.9 * 4 * t * (1 - t)
-            add_sphere(f"PROP_StreetBulb_{side}_{j}_{k}", 0.11, (xx, y, zz - 0.1),
+        bulbs = max(4, int((b - a) / 2.0))
+        for k in range(1, bulbs):
+            t = k / bulbs
+            yy = a + (b - a) * t
+            zz = GROUND_Z + 3.80 - sag * 4 * t * (1 - t) - 0.1
+            add_sphere(f"PROP_BankBulb_{side}_{j}_{k}", 0.11, (x, yy, zz),
                        MAT_BULB_WARM, COL_PROPS, segments=8, rings=4)
 
 # ---------------------------------------------------------------------------
@@ -735,7 +993,7 @@ scatter_sky_lanterns()
 rng = random.Random(SEED + 101)
 for i in range(38):
     side = rng.choice((-1, 1))
-    x = side * rng.uniform(17.0, 23.0)
+    x = side * rng.uniform(RIVER_HALF - 4.0, RIVER_HALF - 0.6)
     y = rng.uniform(-120.0, 170.0)
     add_sphere(f"FX_RiverLight_{i}", 0.12, (x, y, 0.07), MAT_BULB_WARM,
                COL_FX, segments=8, rings=4, scale=(1.0, 1.0, 0.5))
@@ -766,31 +1024,35 @@ def build_boat(name, location, rot_z=0.0, scale=1.0):
     return obj
 
 
-build_boat("PROP_Boat_01", (8.0, -26.0, 0.0), rot_z=0.35, scale=1.0)
-build_boat("PROP_Boat_02", (-10.0, 52.0, 0.0), rot_z=-0.5, scale=0.85)
-build_boat("PROP_Boat_03", (13.0, -54.0, 0.0), rot_z=0.18, scale=1.15)
+build_boat("PROP_Boat_01", (7.0, -26.0, 0.0), rot_z=0.35, scale=1.0)
+build_boat("PROP_Boat_02", (-8.5, 52.0, 0.0), rot_z=-0.5, scale=0.85)
+build_boat("PROP_Boat_03", (7.0, 96.0, 0.0), rot_z=0.18, scale=1.15)
 
 # ---------------------------------------------------------------------------
 # Cherry trees and petals
 # ---------------------------------------------------------------------------
 
 def build_cherry_tree(name, location, scale=1.0, seed=0):
+    """A fine-grained blossom tree: many small puffs instead of a few big balls.
+
+    At first-person distance the old 0.5 m spheres read as fruit.  Small puffs
+    clustered along seven branches keep the silhouette soft and readable.
+    """
     rng = random.Random(seed)
-    parts = []
+    base = Vector(location)
     # Trunk.
-    parts.append(add_cylinder(name + "_Trunk", 7, 0.16 * scale, 2.4 * scale,
-                              (location[0], location[1], location[2] + 1.2 * scale),
-                              MAT_TRUNK, COL_TREES))
-    # Branches.
-    for i in range(5):
-        angle = math.tau * i / 5 + rng.uniform(-0.2, 0.2)
-        length = rng.uniform(1.4, 2.3) * scale
-        start = Vector((location[0], location[1], location[2] + 2.1 * scale))
+    add_cylinder(name + "_Trunk", 8, 0.14 * scale, 2.6 * scale,
+                 (base.x, base.y, base.z + 1.3 * scale), MAT_TRUNK, COL_TREES)
+    # Branches with blossom puffs along their outer half.
+    for i in range(7):
+        angle = math.tau * i / 7 + rng.uniform(-0.24, 0.24)
+        length = rng.uniform(1.1, 1.9) * scale
+        start = Vector((base.x, base.y, base.z + 2.2 * scale))
         end = start + Vector((math.cos(angle) * length, math.sin(angle) * length,
-                              rng.uniform(0.6, 1.4) * scale))
+                              rng.uniform(0.7, 1.5) * scale))
         mid = (start + end) / 2
         d = end - start
-        bpy.ops.mesh.primitive_cylinder_add(vertices=6, radius=0.07 * scale,
+        bpy.ops.mesh.primitive_cylinder_add(vertices=6, radius=0.05 * scale,
                                             depth=d.length, location=mid)
         branch = bpy.context.object
         branch.name = f"{name}_Branch_{i}"
@@ -798,30 +1060,37 @@ def build_cherry_tree(name, location, scale=1.0, seed=0):
         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
         branch.data.materials.append(MAT_TRUNK)
         move_to_collection(branch, COL_TREES)
-        # Blossom cluster at branch tip.
-        for j in range(5):
-            off = Vector((rng.uniform(-0.75, 0.75), rng.uniform(-0.75, 0.75),
-                          rng.uniform(-0.2, 0.85))) * scale
-            add_sphere(f"{name}_Blossom_{i}_{j}", rng.uniform(0.28, 0.48) * scale,
-                       tuple(end + off), MAT_BLOSSOM, COL_TREES,
-                       segments=8, rings=4)
+        for j in range(7):
+            t = rng.uniform(0.5, 1.05)
+            anchor = start.lerp(end, t)
+            off = Vector((rng.uniform(-0.5, 0.5), rng.uniform(-0.5, 0.5),
+                          rng.uniform(-0.25, 0.55))) * scale
+            add_sphere(
+                f"{name}_Blossom_{i}_{j}",
+                rng.uniform(0.13, 0.24) * scale,
+                tuple(anchor + off),
+                MAT_BLOSSOM,
+                COL_TREES,
+                segments=6,
+                rings=3,
+            )
     # Central crown.
-    for j in range(6):
-        off = Vector((rng.uniform(-1.1, 1.1), rng.uniform(-1.1, 1.1),
-                      rng.uniform(2.3, 3.7))) * scale
-        add_sphere(f"{name}_Crown_{j}", rng.uniform(0.36, 0.58) * scale,
-                   tuple(Vector(location) + off), MAT_BLOSSOM, COL_TREES,
-                   segments=8, rings=4)
+    for j in range(16):
+        off = Vector((rng.uniform(-1.15, 1.15), rng.uniform(-1.15, 1.15),
+                      rng.uniform(2.5, 4.0))) * scale
+        add_sphere(f"{name}_Crown_{j}", rng.uniform(0.15, 0.28) * scale,
+                   tuple(base + off), MAT_BLOSSOM, COL_TREES,
+                   segments=6, rings=3)
 
 
 tree_positions = [
-    (23.0, -92.0, 1.2), (23.0, -32.0, 1.2), (23.2, 50.0, 1.2),
-    (23.0, 90.0, 1.2), (23.0, 136.0, 1.2),
-    (-23.0, -108.0, 1.2), (-23.0, -52.0, 1.2), (-23.2, 66.0, 1.2),
-    (-23.0, 116.0, 1.2), (-23.0, 160.0, 1.2),
+    (21.4, -92.0, 1.2), (21.4, -32.0, 1.2), (21.4, 50.0, 1.2),
+    (21.4, 90.0, 1.2), (21.4, 136.0, 1.2),
+    (-21.4, -108.0, 1.2), (-21.4, -52.0, 1.2), (-21.4, 66.0, 1.2),
+    (-21.4, 116.0, 1.2), (-21.4, 160.0, 1.2),
 ]
 for i, pos in enumerate(tree_positions):
-    build_cherry_tree(f"PROP_CherryTree_{i}", pos, scale=random.uniform(0.9, 1.25),
+    build_cherry_tree(f"PROP_CherryTree_{i}", pos, scale=random.uniform(1.05, 1.35),
                       seed=SEED + i * 13)
 
 # Drifting petals.
@@ -923,17 +1192,17 @@ add_area_light("LGT_RoofWash", (0, 20, 90), (0, 30, 0), "#6F8DD0", 5000, 110)
 for side in (-1, 1):
     for i, y in enumerate((-115, -78, -40, 0, 38, 78, 118, 158)):
         add_point_light(f"LGT_Street_{side}_{i}",
-                        (side * (RIVER_HALF - 1.0), y, 4.6),
+                        (side * (RIVER_HALF + 2.6), y, 4.6),
                         "#FFB066", 260.0, 7.0)
     # Facade wash: soft rectangles aimed at the shop fronts.
     for i, y in enumerate((-108, -62, -16, 34, 88, 142)):
         add_area_light(f"LGT_Facade_{side}_{i}",
-                       (side * (RIVER_HALF - 3.0), y, 4.6),
-                       (side * (RIVER_HALF + 2.0), y, 4.6),
+                       (side * (RIVER_HALF + 3.2), y, 4.6),
+                       (side * (RIVER_HALF + PROMENADE), y, 4.6),
                        "#FFB877", 1600, 8)
 
 # Bridge lanterns.
-for i, x in enumerate((-14.0, -5.0, 5.0, 14.0)):
+for i, x in enumerate((-13.0, -4.5, 4.5, 13.0)):
     add_point_light(f"LGT_Bridge_{i}", (x, BRIDGE_Y, 7.0), "#FFB36A", 90.0, 2.2)
 
 # Tower glow: warm core at each tier plus a warm rim.
@@ -947,7 +1216,7 @@ add_area_light("LGT_TowerRoof", (0, TOWER_Y - 22, 34), (0, TOWER_Y, 24),
                "#FFC58A", 1100, 18)
 
 # Pavilion and plaza.
-add_point_light("LGT_Pavilion", (32.0, PAVILION_Y, 6.0), "#FFC070", 200.0, 7.0)
+add_point_light("LGT_Pavilion", (30.5, PAVILION_Y, 6.0), "#FFC070", 200.0, 7.0)
 
 # ---------------------------------------------------------------------------
 # Mist planes for depth
@@ -961,10 +1230,10 @@ for i, (y, z, w) in enumerate(((55.0, 2.2, 90), (120.0, 3.0, 110), (175.0, 2.6, 
 # ---------------------------------------------------------------------------
 
 CAM_HERO = add_camera("CAM_Hero", (0.0, -38.0, 3.2), (0.0, 78.0, 14.0), 45.0)
-CAM_BRIDGE = add_camera("CAM_BridgeApproach", (-22.4, -24.0, 4.2), (2.0, 46.0, 9.0), 46.0)
-CAM_TOWER = add_camera("CAM_TowerDetail", (18.0, 18.0, 4.2), (0.0, TOWER_Y, 13.5), 40.0)
-CAM_STREET = add_camera("CAM_Street", (20.0, -92.0, 4.2), (0.0, 20.0, 8.0), 50.0)
-CAM_BOAT = add_camera("CAM_Boat", (2.0, -64.0, 2.6), (13.0, -54.0, 1.8), 42.0)
+CAM_BRIDGE = add_camera("CAM_BridgeApproach", (-16.5, -24.0, 4.2), (2.0, 46.0, 9.0), 46.0)
+CAM_TOWER = add_camera("CAM_TowerDetail", (12.0, 18.0, 4.2), (0.0, TOWER_Y, 13.5), 40.0)
+CAM_STREET = add_camera("CAM_Street", (17.4, -92.0, 4.2), (0.0, 20.0, 8.0), 50.0)
+CAM_BOAT = add_camera("CAM_Boat", (2.0, -64.0, 2.6), (7.0, -54.0, 1.8), 42.0)
 
 scene.render.engine = "BLENDER_EEVEE"
 scene.eevee.taa_render_samples = 32 if FAST else 64

@@ -8,6 +8,7 @@ export interface Effect {
 /** Additive point burst with gravity and drag. Used for sparks, embers and fireworks. */
 export class ParticleBurst implements Effect {
   protected readonly points: THREE.Points
+  protected readonly flash: THREE.Sprite | null = null
   protected readonly positions: Float32Array
   protected readonly velocities: Float32Array
   protected age = 0
@@ -29,6 +30,8 @@ export class ParticleBurst implements Effect {
       life?: number
       gravity?: number
       drag?: number
+      /** Emit on a sphere with a tight speed band: a firework shell, not a fountain. */
+      shell?: boolean
     },
   ) {
     this.scene = scene
@@ -42,15 +45,26 @@ export class ParticleBurst implements Effect {
     const c = new THREE.Color(options.color)
 
     for (let i = 0; i < count; i++) {
-      this.positions[i * 3] = origin.x
-      this.positions[i * 3 + 1] = origin.y
-      this.positions[i * 3 + 2] = origin.z
-      const dir = new THREE.Vector3(
-        Math.random() - 0.5,
-        Math.random() * options.spread,
-        Math.random() - 0.5,
-      ).normalize()
-      const v = options.speed * (0.4 + Math.random() * 0.8)
+      const dir = new THREE.Vector3()
+      if (options.shell) {
+        const y = Math.random() * 2 - 1
+        const a = Math.random() * Math.PI * 2
+        const r = Math.sqrt(1 - y * y)
+        dir.set(r * Math.cos(a), y, r * Math.sin(a))
+      } else {
+        dir
+          .set(Math.random() - 0.5, Math.random() * options.spread, Math.random() - 0.5)
+          .normalize()
+      }
+      const v =
+        options.speed * (options.shell ? 0.9 + Math.random() * 0.12 : 0.4 + Math.random() * 0.8)
+      // Start each spark a fraction of a second into its flight.  Without this
+      // every particle sits on the origin on the first frame and hundreds of
+      // additive sprites stack into a full-screen white flash.
+      const preAge = Math.random() * 0.32
+      this.positions[i * 3] = origin.x + dir.x * v * preAge
+      this.positions[i * 3 + 1] = origin.y + dir.y * v * preAge
+      this.positions[i * 3 + 2] = origin.z + dir.z * v * preAge
       this.velocities[i * 3] = dir.x * v
       this.velocities[i * 3 + 1] = dir.y * v
       this.velocities[i * 3 + 2] = dir.z * v
@@ -78,10 +92,31 @@ export class ParticleBurst implements Effect {
     )
     this.points.frustumCulled = false
     scene.add(this.points)
+    if (options.shell) {
+      this.flash = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: glow,
+          color: options.color,
+          transparent: true,
+          opacity: 0.85,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        }),
+      )
+      this.flash.position.copy(origin)
+      this.flash.scale.setScalar(3)
+      scene.add(this.flash)
+    }
   }
 
   update(dt: number) {
     this.age += dt
+    if (this.flash) {
+      const k = Math.min(1, this.age / 0.4)
+      this.flash.scale.setScalar(3 + k * 11)
+      this.flash.material.opacity = 0.85 * (1 - k)
+      this.flash.visible = k < 1
+    }
     const count = this.positions.length / 3
     for (let i = 0; i < count; i++) {
       this.velocities[i * 3 + 1] -= this.gravity * dt
@@ -92,7 +127,8 @@ export class ParticleBurst implements Effect {
     }
     ;(this.points.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true
     const mat = this.points.material as THREE.PointsMaterial
-    mat.opacity = Math.max(0, 1 - this.age / this.life)
+    // A short fade-in keeps the shell from flashing the whole frame at birth.
+    mat.opacity = Math.min(1, this.age / 0.18) * Math.max(0, 1 - this.age / this.life)
     return this.age < this.life
   }
 
@@ -100,6 +136,10 @@ export class ParticleBurst implements Effect {
     scene.remove(this.points)
     this.points.geometry.dispose()
     ;(this.points.material as THREE.Material).dispose()
+    if (this.flash) {
+      scene.remove(this.flash)
+      this.flash.material.dispose()
+    }
   }
 }
 
@@ -227,5 +267,123 @@ export class Ripple implements Effect {
     scene.remove(this.mesh)
     this.mesh.geometry.dispose()
     ;(this.mesh.material as THREE.Material).dispose()
+  }
+}
+
+/**
+ * Slow petals and low mist along the river. Two point clouds keep the reference's
+ * layered depth without adding a draw call per speck.
+ */
+export class RiverAtmosphere {
+  readonly object = new THREE.Group()
+  private readonly petals: THREE.Points
+  private readonly mist: THREE.Points
+  private readonly petalPositions: Float32Array
+  private readonly petalVelocities: Float32Array
+  private readonly petalPhases: Float32Array
+  private readonly mistPositions: Float32Array
+  private readonly mistPhases: Float32Array
+  private time = 0
+
+  constructor(glow: THREE.Texture) {
+    let seed = 0x5f3759df
+    const rng = () => {
+      seed = (seed + 0x6d2b79f5) | 0
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+
+    const petalCount = 520
+    this.petalPositions = new Float32Array(petalCount * 3)
+    this.petalVelocities = new Float32Array(petalCount * 3)
+    this.petalPhases = new Float32Array(petalCount)
+    const petalColors = new Float32Array(petalCount * 3)
+    const palette = ['#ffc2d6', '#ffe0ea', '#f4a6c2'].map((c) => new THREE.Color(c))
+    for (let i = 0; i < petalCount; i++) {
+      this.petalPositions[i * 3] = -26 + rng() * 52
+      this.petalPositions[i * 3 + 1] = 1.2 + rng() * 15
+      this.petalPositions[i * 3 + 2] = -140 + rng() * 320
+      this.petalVelocities[i * 3] = (rng() - 0.5) * 0.14
+      this.petalVelocities[i * 3 + 1] = -0.1 - rng() * 0.14
+      this.petalVelocities[i * 3 + 2] = 0.22 + rng() * 0.38
+      this.petalPhases[i] = rng() * Math.PI * 2
+      const c = palette[Math.floor(rng() * palette.length)]
+      petalColors[i * 3] = c.r
+      petalColors[i * 3 + 1] = c.g
+      petalColors[i * 3 + 2] = c.b
+    }
+    const petalGeo = new THREE.BufferGeometry()
+    petalGeo.setAttribute('position', new THREE.BufferAttribute(this.petalPositions, 3))
+    petalGeo.setAttribute('color', new THREE.BufferAttribute(petalColors, 3))
+    this.petals = new THREE.Points(
+      petalGeo,
+      new THREE.PointsMaterial({
+        size: 0.52,
+        map: glow,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.7,
+        depthWrite: false,
+        sizeAttenuation: true,
+      }),
+    )
+    this.petals.frustumCulled = false
+    this.object.add(this.petals)
+
+    const mistCount = 34
+    this.mistPositions = new Float32Array(mistCount * 3)
+    this.mistPhases = new Float32Array(mistCount)
+    for (let i = 0; i < mistCount; i++) {
+      this.mistPositions[i * 3] = -22 + rng() * 44
+      this.mistPositions[i * 3 + 1] = 0.9 + rng() * 1.7
+      this.mistPositions[i * 3 + 2] = -130 + rng() * 300
+      this.mistPhases[i] = rng() * Math.PI * 2
+    }
+    const mistGeo = new THREE.BufferGeometry()
+    mistGeo.setAttribute('position', new THREE.BufferAttribute(this.mistPositions, 3))
+    this.mist = new THREE.Points(
+      mistGeo,
+      new THREE.PointsMaterial({
+        size: 4.2,
+        map: glow,
+        color: new THREE.Color('#5a5aa8'),
+        transparent: true,
+        opacity: 0.12,
+        depthWrite: false,
+        sizeAttenuation: true,
+      }),
+    )
+    this.mist.frustumCulled = false
+    this.object.add(this.mist)
+  }
+
+  update(dt: number) {
+    this.time += dt
+    for (let i = 0; i < this.petalPhases.length; i++) {
+      const p = i * 3
+      this.petalPositions[p] +=
+        (this.petalVelocities[p] + Math.sin(this.time + this.petalPhases[i]) * 0.12) * dt
+      this.petalPositions[p + 1] += this.petalVelocities[p + 1] * dt
+      this.petalPositions[p + 2] += this.petalVelocities[p + 2] * dt
+      if (this.petalPositions[p + 2] > 182) this.petalPositions[p + 2] = -140
+      if (this.petalPositions[p + 1] < 0.7) this.petalPositions[p + 1] = 16
+    }
+    for (let i = 0; i < this.mistPhases.length; i++) {
+      const p = i * 3
+      this.mistPositions[p + 2] += 0.09 * dt
+      this.mistPositions[p + 1] += Math.sin(this.time * 0.35 + this.mistPhases[i]) * 0.0015
+      if (this.mistPositions[p + 2] > 180) this.mistPositions[p + 2] = -140
+    }
+    ;(this.petals.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true
+    ;(this.mist.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true
+  }
+
+  dispose(scene: THREE.Scene) {
+    scene.remove(this.object)
+    this.petals.geometry.dispose()
+    ;(this.petals.material as THREE.Material).dispose()
+    this.mist.geometry.dispose()
+    ;(this.mist.material as THREE.Material).dispose()
   }
 }

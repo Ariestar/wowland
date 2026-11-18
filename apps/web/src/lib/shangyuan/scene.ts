@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
@@ -6,49 +7,39 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShangyuanAudio } from './audio'
+import { type CollisionLayout, ObstacleField, WalkableGround } from './collision'
 import {
   BLESSINGS,
-  BLOCKERS,
   INTERACTABLES,
   type InteractableId,
   LANTERN_STYLES,
-  PLACEMENTS,
   RIDDLES,
+  SCENE,
   VIEWPOINTS,
 } from './data'
-import { type Effect, IronFlower, ParticleBurst, Ripple } from './effects'
+import { type Effect, IronFlower, ParticleBurst, Ripple, RiverAtmosphere } from './effects'
 import { gradingShader, sanitizeShader } from './postFx'
 import type { Panel, Phase, SceneCallbacks } from './types'
 import { createWaterMaterial, glowTexture, skyLanternTexture } from './water'
 
-const MODEL_BASE = '/models/shangyuan/'
+const MODEL_BASE = '/models/lantern-river/'
+const TEMPLATE_BASE = '/models/shangyuan/'
 const EYE = 1.62
 const SPEED = 3.6
 const RUN = 6.2
+const PLAYER_RADIUS = 0.32
+const STEP_UP = 0.5
+const STEP_DOWN = 1.2
+/** Keep sub-steps shorter than the player radius so no obstacle can be tunnelled. */
+const MAX_SUBSTEP = 0.28
 
 /**
- * Bridge deck height in Blender metres. Mirrors `deck_height()` in sy_build.py:
- * 0.72 + 3.05 * (1 - (y / 14.8)^2). Keep these in sync if the arch is rebuilt.
+ * The mirrored world doubles the triangle count.  Phones and low-core machines
+ * keep the shader-only water, which already carries lantern streaks and glints.
  */
-const deckHeight = (y: number) => {
-  const t = Math.min(1, Math.abs(y) / 14.8)
-  return 0.72 + 3.05 * (1 - t * t)
-}
-
-/** True when a Blender (x, y) point is inside a building footprint. */
-function blocked(x: number, y: number) {
-  for (const b of BLOCKERS) {
-    if (Math.abs(x - b.x) < b.hx + 0.35 && Math.abs(y - b.y) < b.hy + 0.35) return true
-  }
-  return false
-}
-
-/** Walkable height at a Blender (x, y) spot; null means water. */
-function groundAt(x: number, y: number): number | null {
-  if (Math.abs(x - 90) < 2.75 && Math.abs(y) <= 14.7) return deckHeight(y)
-  if (Math.abs(y) < 12.4) return null
-  if (Math.abs(y) < 15.4) return 0.72
-  return 0.65
+function reflectionBudget(): boolean {
+  if (window.matchMedia('(pointer: coarse)').matches) return false
+  return (navigator.hardwareConcurrency ?? 8) >= 6
 }
 
 export class ShangyuanScene {
@@ -59,11 +50,15 @@ export class ShangyuanScene {
   private readonly camera: THREE.PerspectiveCamera
   private readonly composer: EffectComposer
   private readonly bloom: UnrealBloomPass
+  private readonly grading: ShaderPass
+  private readonly atmosphere: RiverAtmosphere
   private readonly clock = new THREE.Clock()
   private readonly loader = new GLTFLoader()
   private readonly audio = new ShangyuanAudio()
 
   private readonly waterMat: THREE.ShaderMaterial
+  private reflection: THREE.Object3D | null = null
+  private environmentMap: THREE.Texture | null = null
   private readonly glow: THREE.Texture
   private readonly skyGlow: THREE.Texture
   private skyLanterns: {
@@ -75,7 +70,6 @@ export class ShangyuanScene {
   } | null = null
   private readonly towerGlow: THREE.Sprite[] = []
   private readonly wheelPivots: THREE.Object3D[] = []
-  private readonly boats: THREE.Object3D[] = []
   private readonly lanterns: {
     obj: THREE.Object3D
     halo: THREE.Sprite
@@ -86,9 +80,16 @@ export class ShangyuanScene {
   private readonly effects: Effect[] = []
   private readonly lanternTemplates = new Map<string, THREE.Object3D>()
 
-  private player = new THREE.Vector3(1, 0.65 + EYE, -18)
-  private yaw = 0
-  private pitch = -0.03
+  private player = new THREE.Vector3(16.2, SCENE.groundZ + EYE, 124)
+  private playerGround: number = SCENE.groundZ
+  private layout: CollisionLayout | null = null
+  /** Canal half-width, replaced by layout.json once the level loads. */
+  private riverHalf = 12.5
+  private groundField: WalkableGround | null = null
+  private obstacleField: ObstacleField | null = null
+  private collisionDebug: THREE.Group | null = null
+  private yaw = -1.75
+  private pitch = 0
   private keys = new Set<string>()
   private dragging = false
   private lastPointer = { x: 0, y: 0 }
@@ -111,6 +112,15 @@ export class ShangyuanScene {
   private raf = 0
   private photo = false
   private pan: { yaw: number; pitch: number; t: number } | null = null
+  private viewTween: {
+    from: THREE.Vector3
+    to: THREE.Vector3
+    fromYaw: number
+    toYaw: number
+    fromPitch: number
+    toPitch: number
+    t: number
+  } | null = null
   private idleClock = 0
   private touchMove = 0
   private touchStrafe = 0
@@ -124,31 +134,44 @@ export class ShangyuanScene {
       powerPreference: 'high-performance',
     })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75))
-    this.renderer.toneMapping = THREE.NeutralToneMapping
-    this.renderer.toneMappingExposure = 1.14
+    this.renderer.toneMapping = THREE.AgXToneMapping
+    this.renderer.toneMappingExposure = 0.7
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
+    this.renderer.shadowMap.enabled = true
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
     this.renderer.info.autoReset = false
 
-    this.camera = new THREE.PerspectiveCamera(62, 1, 0.1, 900)
+    const draco = new DRACOLoader()
+    draco.setDecoderPath('/draco/')
+    this.loader.setDRACOLoader(draco)
+
+    this.camera = new THREE.PerspectiveCamera(48, 1, 0.1, 1800)
     this.camera.position.copy(this.player)
-    this.scene.fog = new THREE.FogExp2(0x0a1228, 0.0034)
+    this.scene.fog = new THREE.FogExp2(0x070d20, 0.0013)
 
     this.glow = glowTexture()
     this.skyGlow = skyLanternTexture()
-    this.waterMat = createWaterMaterial()
-    const water = new THREE.Mesh(new THREE.PlaneGeometry(180, 24), this.waterMat)
+    this.waterMat = createWaterMaterial(reflectionBudget() ? 0.8 : 0.96)
+    const water = new THREE.Mesh(new THREE.PlaneGeometry(36, 380), this.waterMat)
     water.rotation.x = -Math.PI / 2
-    water.position.set(90, 0.05, 0)
+    water.position.set(0, 0.05, -20)
+    // Draw before floating lanterns so its transparency never swallows them.
+    water.renderOrder = -2
     this.scene.add(water)
+
+    this.atmosphere = new RiverAtmosphere(this.glow)
+    this.scene.add(this.atmosphere.object)
 
     this.composer = new EffectComposer(this.renderer)
     this.composer.addPass(new RenderPass(this.scene, this.camera))
     this.composer.addPass(new ShaderPass(sanitizeShader()))
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.46, 0.52, 0.92)
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.48, 0.55, 0.7)
     this.composer.addPass(this.bloom)
     this.composer.addPass(new OutputPass())
-    this.composer.addPass(new ShaderPass(gradingShader()))
+    this.grading = new ShaderPass(gradingShader())
+    this.composer.addPass(this.grading)
 
+    this.addEnvironment()
     this.addSky()
     this.addSkyLanterns()
     this.addLights()
@@ -158,15 +181,85 @@ export class ShangyuanScene {
 
   // ---------------------------------------------------------------- setup
 
+  /**
+   * A small procedural night sky, prefiltered into an environment map.  Without
+   * it the metallic gold, lacquer and roof materials have nothing to reflect and
+   * read as flat black cards.  The warm band at the horizon also matches the
+   * light spilling off the lantern streets.
+   */
+  private addEnvironment() {
+    const width = 1024
+    const height = 512
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d')!
+    const grad = ctx.createLinearGradient(0, 0, 0, height)
+    grad.addColorStop(0, '#01030c')
+    grad.addColorStop(0.42, '#071434')
+    grad.addColorStop(0.56, '#132a5a')
+    grad.addColorStop(0.64, '#3b3a6d')
+    grad.addColorStop(0.68, '#77485a')
+    grad.addColorStop(0.74, '#1a1c34')
+    grad.addColorStop(1, '#060a16')
+    ctx.fillStyle = grad
+    ctx.fillRect(0, 0, width, height)
+
+    const rng = (() => {
+      let seed = 20261118
+      return () => {
+        seed = (seed * 1664525 + 1013904223) % 4294967296
+        return seed / 4294967296
+      }
+    })()
+
+    // Warm lantern bokeh along the waterfront band.
+    for (let i = 0; i < 64; i++) {
+      const x = rng() * width
+      const y = height * (0.6 + rng() * 0.09)
+      const radius = 6 + rng() * 22
+      const glow = ctx.createRadialGradient(x, y, 0, x, y, radius)
+      glow.addColorStop(0, `rgba(255, 198, 126, ${0.5 + rng() * 0.4})`)
+      glow.addColorStop(0.4, `rgba(255, 142, 72, ${0.22 + rng() * 0.18})`)
+      glow.addColorStop(1, 'rgba(255, 120, 40, 0)')
+      ctx.fillStyle = glow
+      ctx.beginPath()
+      ctx.arc(x, y, radius, 0, Math.PI * 2)
+      ctx.fill()
+    }
+
+    // Moon: a small cold key reflected by water and roof tiles.
+    const moonX = width * 0.36
+    const moonY = height * 0.24
+    const moon = ctx.createRadialGradient(moonX, moonY, 0, moonX, moonY, 52)
+    moon.addColorStop(0, 'rgba(236, 244, 255, 1)')
+    moon.addColorStop(0.16, 'rgba(196, 220, 255, 0.7)')
+    moon.addColorStop(1, 'rgba(120, 160, 255, 0)')
+    ctx.fillStyle = moon
+    ctx.fillRect(moonX - 60, moonY - 60, 120, 120)
+
+    const source = new THREE.CanvasTexture(canvas)
+    source.mapping = THREE.EquirectangularReflectionMapping
+    source.colorSpace = THREE.SRGBColorSpace
+    const pmrem = new THREE.PMREMGenerator(this.renderer)
+    this.environmentMap = pmrem.fromEquirectangular(source).texture
+    this.scene.environment = this.environmentMap
+    // Enough for metal and lacquer to pick up the sky; low enough that the
+    // rough plaster keeps its warm lamplight instead of turning moon-blue.
+    this.scene.environmentIntensity = 0.28
+    source.dispose()
+    pmrem.dispose()
+  }
+
   private addSky() {
     const mat = new THREE.ShaderMaterial({
       side: THREE.BackSide,
       depthWrite: false,
       uniforms: {
-        uTop: { value: new THREE.Color('#02040c') },
-        uMid: { value: new THREE.Color('#0a1738') },
-        uLow: { value: new THREE.Color('#231a48') },
-        uHaze: { value: new THREE.Color('#3b2d6e') },
+        uTop: { value: new THREE.Color('#050f33') },
+        uMid: { value: new THREE.Color('#0a1d55') },
+        uLow: { value: new THREE.Color('#1a3270') },
+        uHaze: { value: new THREE.Color('#4b3f78') },
         uMoon: { value: new THREE.Vector3(-0.42, 0.52, 0.42).normalize() },
       },
       vertexShader: /* glsl */ `
@@ -183,12 +276,12 @@ export class ShangyuanScene {
           float h = clamp(vDir.y, -1.0, 1.0);
           vec3 c = mix(uLow, uMid, smoothstep(-0.05, 0.3, h));
           c = mix(c, uTop, smoothstep(0.26, 0.9, h));
-          // The festival sits under a low violet band: a cool horizon keeps the
+          // The festival sits under a low cobalt band: a cool horizon keeps the
           // sky from reading as flat black above a lantern-lit street.
           float band = exp(-pow((h - 0.02) * 9.0, 2.0));
-          c += uHaze * band * 0.42;
-          float warm = exp(-pow((h - 0.004) * 26.0, 2.0));
-          c += vec3(0.3, 0.11, 0.12) * warm * 0.35;
+          c += uHaze * band * 0.32;
+          float warm = exp(-pow((h - 0.004) * 30.0, 2.0));
+          c += vec3(0.22, 0.09, 0.1) * warm * 0.24;
           float d = max(dot(vDir, uMoon), 0.0);
           c += vec3(0.9, 0.95, 1.0) * pow(d, 620.0) * 0.9;
           c += vec3(0.22, 0.3, 0.46) * pow(d, 10.0) * 0.3;
@@ -200,7 +293,7 @@ export class ShangyuanScene {
     sky.frustumCulled = false
     this.scene.add(sky)
 
-    const count = 460
+    const count = 1400
     const positions = new Float32Array(count * 3)
     for (let i = 0; i < count; i++) {
       const theta = Math.random() * Math.PI * 2
@@ -224,11 +317,50 @@ export class ShangyuanScene {
     )
     stars.frustumCulled = false
     this.scene.add(stars)
+
+    // A tight blue-white star cluster, like the one over the reference tower.
+    const clusterCount = 1500
+    const cluster = new Float32Array(clusterCount * 3)
+    const center = new THREE.Vector3(0.34, 0.62, -0.72).normalize()
+    for (let i = 0; i < clusterCount; i++) {
+      const spread = 0.11 + Math.random() ** 2.2 * 0.24
+      const theta = Math.random() * Math.PI * 2
+      const phi = Math.acos(1 - Math.random() * 0.7)
+      const dir = center
+        .clone()
+        .add(
+          new THREE.Vector3(
+            Math.sin(phi) * Math.cos(theta),
+            Math.sin(phi) * Math.sin(theta),
+            Math.cos(phi),
+          ).multiplyScalar(spread),
+        )
+        .normalize()
+        .multiplyScalar(535)
+      cluster[i * 3] = dir.x
+      cluster[i * 3 + 1] = dir.y
+      cluster[i * 3 + 2] = dir.z
+    }
+    const clusterGeo = new THREE.BufferGeometry()
+    clusterGeo.setAttribute('position', new THREE.BufferAttribute(cluster, 3))
+    const clusterStars = new THREE.Points(
+      clusterGeo,
+      new THREE.PointsMaterial({
+        size: 1.3,
+        color: 0xbcd8ff,
+        transparent: true,
+        opacity: 0.8,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
+    )
+    clusterStars.frustumCulled = false
+    this.scene.add(clusterStars)
   }
 
   /** Drifting wish lanterns: warm bokeh above the roofline, the scene's signature. */
   private addSkyLanterns() {
-    const count = 110
+    const count = 88
     const positions = new Float32Array(count * 3)
     const sizes = new Float32Array(count)
     const colors = new Float32Array(count * 3)
@@ -238,10 +370,10 @@ export class ShangyuanScene {
     const warm = new THREE.Color('#ffd9a0')
     const amber = new THREE.Color('#ffb877')
     for (let i = 0; i < count; i++) {
-      positions[i * 3] = 4 + Math.random() * 178
-      positions[i * 3 + 1] = 16 + Math.random() * 52
-      positions[i * 3 + 2] = -52 + Math.random() * 104
-      sizes[i] = 0.7 + Math.random() * 0.9
+      positions[i * 3] = -26 + Math.random() * 52
+      positions[i * 3 + 1] = 12 + Math.random() * 44
+      positions[i * 3 + 2] = -140 + Math.random() * 320
+      sizes[i] = 0.42 + Math.random() * 0.62
       const c = i % 6 === 0 ? amber : warm
       colors[i * 3] = c.r
       colors[i * 3 + 1] = c.g
@@ -287,35 +419,67 @@ export class ShangyuanScene {
   }
 
   private addLights() {
-    this.scene.add(new THREE.AmbientLight(0x33456b, 1.55))
-    this.scene.add(new THREE.HemisphereLight(0x3d5b8c, 0x0b0f1a, 1.7))
+    // Mirrors the lookdev rig: a low blue world, a weak moon key, and a regular
+    // rhythm of warm practicals.  The paper windows carry their own emission;
+    // these lights give the plaster, timber and stone something to model.
+    this.scene.add(new THREE.AmbientLight(0x1a2a4f, 0.08))
+    this.scene.add(new THREE.HemisphereLight(0x2e4c82, 0x04060c, 0.28))
 
-    const moon = new THREE.DirectionalLight(0x9fc0ff, 1.3)
-    moon.position.set(-60, 90, 55)
+    // A low warm cross-light on each bank stands in for the lookdev scene's
+    // large facade area lights; it keeps the plaster beige instead of moonlit
+    // lavender without adding dozens of point lights.
+    for (const x of [-180, 180]) {
+      const wash = new THREE.DirectionalLight(0xffb877, 0.24)
+      wash.position.set(x, 34, -10)
+      wash.target.position.set(0, 2, -10)
+      this.scene.add(wash)
+      this.scene.add(wash.target)
+    }
+
+    const moon = new THREE.DirectionalLight(0x9fc0ff, 0.55)
+    moon.position.set(-90, 130, 70)
+    moon.target.position.set(0, 0, -20)
+    moon.castShadow = true
+    moon.shadow.mapSize.set(2048, 2048)
+    moon.shadow.camera.left = -140
+    moon.shadow.camera.right = 140
+    moon.shadow.camera.top = 140
+    moon.shadow.camera.bottom = -140
+    moon.shadow.camera.near = 20
+    moon.shadow.camera.far = 460
+    moon.shadow.bias = -0.0004
+    moon.shadow.normalBias = 0.6
     this.scene.add(moon)
+    this.scene.add(moon.target)
+
+    const fill = new THREE.DirectionalLight(0x4d6ba8, 0.16)
+    fill.position.set(130, 70, -110)
+    fill.target.position.set(0, 0, 20)
+    this.scene.add(fill)
+    this.scene.add(fill.target)
 
     const warm = (x: number, y: number, z: number, intensity: number, range: number) => {
-      const light = new THREE.PointLight(0xffb066, intensity, range, 2)
+      const light = new THREE.PointLight(0xffae63, intensity, range, 2)
       light.position.set(x, y, z)
       this.scene.add(light)
     }
-    warm(12, 5.2, -18, 20, 22)
-    warm(58, 4.5, -21, 16, 20)
-    warm(67, 4, -12, 18, 18)
-    warm(96, 12, -20, 30, 32)
-    warm(125, 4, -10, 16, 20)
-    warm(140, 6, 19, 22, 30)
-    // South bank: the far facades need their own light or they read as black boxes.
-    warm(40, 4.2, 30.6, 26, 18)
-    warm(68, 4.2, 30.6, 26, 18)
-    warm(112, 4.2, 30.6, 26, 18)
-    warm(124, 3.6, 27.6, 16, 14)
-    // The baked plaster wall on the south bank needs light in front of it.
-    warm(70, 5, 31, 34, 24)
-    warm(86, 3.6, 29.2, 24, 16)
-    warm(96, 3.4, 29.2, 18, 14)
-    warm(140, 4.6, 17, 34, 28)
-    warm(147, 3.2, 20, 14, 18)
+    // Blender's street lamps sit every 38 m at 4.6 m; keep that spacing so the
+    // facades get alternating warm bays instead of one even wash.
+    for (const y of [-115, -78, -40, 0, 38, 78, 118, 158]) {
+      warm(21.2, 4.6, -y, 38, 20)
+      warm(-21.2, 4.6, -y, 30, 20)
+    }
+    for (const x of [-14, -5, 5, 14]) warm(x, 7, -10, 32, 11)
+    for (const [y, intensity] of [
+      [6, 120],
+      [12, 96],
+      [18, 86],
+      [24, 78],
+      [30, 70],
+    ] as const) {
+      warm(0, y, -78, intensity, 18)
+    }
+    warm(31, 6, -62, 62, 14)
   }
 
   private bindEvents() {
@@ -358,6 +522,7 @@ export class ShangyuanScene {
 
   private look(dx: number, dy: number) {
     this.pan = null
+    this.viewTween = null
     this.yaw += dx
     this.pitch = Math.max(-1.15, Math.min(1.05, this.pitch - dy))
   }
@@ -367,12 +532,18 @@ export class ShangyuanScene {
       this.interact()
       return
     }
+    if (e.code === 'KeyC') {
+      this.toggleCollisionDebug()
+      return
+    }
     if (e.code === 'Escape') {
       this.closePanel()
       return
     }
-    if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ShiftLeft', 'ShiftRight'].includes(e.code))
+    if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ShiftLeft', 'ShiftRight'].includes(e.code)) {
       e.preventDefault()
+      this.viewTween = null
+    }
     this.keys.add(e.code)
   }
 
@@ -394,40 +565,67 @@ export class ShangyuanScene {
   // ---------------------------------------------------------------- loading
 
   async load() {
-    const total = PLACEMENTS.length + 3
+    const total = 9
     let done = 0
     const tick = () => {
       done++
       this.cb.onProgress(done, total)
     }
 
-    const jobs = PLACEMENTS.map(async (p) => {
-      const gltf = await this.loader.loadAsync(`${MODEL_BASE}${p.id}.glb`)
-      const root = gltf.scene
-      root.position.set(p.pos[0], p.pos[2], -p.pos[1])
-      root.rotation.y = p.rot
-      root.traverse((o) => {
+    // The same Blender export owns the visuals and the collision.  Loading the
+    // layout before the player moves means a stale hand-written rectangle can
+    // never block visibly open paving.
+    const layoutJob = fetch(`${MODEL_BASE}layout.json`)
+      .then((response) => {
+        if (!response.ok) throw new Error(`layout.json ${response.status}`)
+        return response.json() as Promise<CollisionLayout>
+      })
+      .then((layout) => {
+        this.layout = layout
+        this.groundField = new WalkableGround(layout)
+        this.obstacleField = new ObstacleField(layout.obstacles)
+        this.playerGround = layout.groundZ
+        this.riverHalf = layout.riverHalf
+        this.waterMat.uniforms.uBankX.value = layout.riverHalf
+        this.player.set(layout.spawn.x, layout.groundZ + EYE, -layout.spawn.y)
+        this.camera.position.copy(this.player)
+        this.buildCollisionDebug()
+        tick()
+      })
+
+    const worldJob = this.loader.loadAsync(`${MODEL_BASE}world.glb`).then((gltf) => {
+      const world = gltf.scene
+      world.name = 'LanternRiver_World'
+      const maxAnisotropy = this.renderer.capabilities.getMaxAnisotropy()
+      world.traverse((o) => {
         const mesh = o as THREE.Mesh
         if (!mesh.isMesh) return
+        // One merged mesh spans the whole street; frustum culling would always
+        // pass, so skip it and keep the 39 material primitives together.
+        mesh.frustumCulled = false
+        mesh.castShadow = true
+        mesh.receiveShadow = true
         const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
         for (const m of mats) {
-          const std = m as THREE.MeshStandardMaterial
-          if (std.name === 'SY_Lantern') std.emissiveIntensity = 1.9
-          if (std.name === 'SY_Paper') std.emissiveIntensity = 1.5
-          if (std.name === 'SY_Reflection') {
-            std.transparent = true
-            std.opacity = 0.5
-            std.depthWrite = false
+          if (!m) continue
+          const std = m as THREE.MeshPhysicalMaterial
+          // The GLB ships the full material graph, including the baked maps;
+          // keep emissive strength and every physical lobe untouched.  Only
+          // texture sampling needs the runtime renderer's anisotropy limit.
+          for (const key of ['map', 'normalMap', 'roughnessMap'] as const) {
+            const texture = std[key]
+            if (texture) {
+              texture.anisotropy = maxAnisotropy
+              texture.needsUpdate = true
+            }
           }
+          std.envMapIntensity = 0.8
+          std.dithering = true
         }
       })
-      if (p.id === 'model-lantern-tower') this.prepareTower(root)
-      if (p.id === 'model-water') {
-        tick()
-        return
-      }
-      if (p.id === 'model-boat' || p.id === 'model-skiff') this.boats.push(root)
-      this.scene.add(root)
+      this.scene.add(world)
+      this.prepareTower(world)
+      this.addReflection(world)
       tick()
     })
 
@@ -437,22 +635,22 @@ export class ShangyuanScene {
       'model-river-lantern-fish',
     ]
     const templateJobs = templates.map(async (id) => {
-      const gltf = await this.loader.loadAsync(`${MODEL_BASE}${id}.glb`)
+      const gltf = await this.loader.loadAsync(`${TEMPLATE_BASE}${id}.glb`)
       gltf.scene.traverse((o) => {
         const mesh = o as THREE.Mesh
         if (!mesh.isMesh) return
         const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
         for (const m of mats) {
           const std = m as THREE.MeshStandardMaterial
-          if (std.name === 'SY_Lantern') std.emissiveIntensity = 1.8
-          if (std.name === 'SY_Paper') std.emissiveIntensity = 1.5
+          if (std.name === 'SY_Lantern') std.emissiveIntensity = 2.2
+          if (std.name === 'SY_Paper') std.emissiveIntensity = 1.6
         }
       })
       this.lanternTemplates.set(id, gltf.scene)
       tick()
     })
 
-    await Promise.all([...jobs, ...templateJobs])
+    await Promise.all([layoutJob, worldJob, ...templateJobs])
     this.addGroundGlow()
     this.seedAmbientLanterns()
     this.pushHud()
@@ -460,23 +658,144 @@ export class ShangyuanScene {
     this.loop()
   }
 
-  private prepareTower(root: THREE.Object3D) {
-    root.traverse((o) => {
-      if (o.name.startsWith('pivot-lantern-wheel')) this.wheelPivots.push(o)
+  /**
+   * Mirror the finished world under the water.  The river surface is a shader
+   * with a little transparency, so the mirrored lanterns and facades show
+   * through and every quay light gets a real, correctly placed reflection.
+   */
+  private addReflection(world: THREE.Object3D) {
+    if (!reflectionBudget()) return
+    const mirror = world.clone(true)
+    mirror.name = 'LanternRiver_Reflection'
+    // The water sits at y = 0.05, so mirroring across that plane is 0.1 - y.
+    mirror.scale.y = -1
+    mirror.position.y = 0.1
+    mirror.traverse((o) => {
+      const mesh = o as THREE.Mesh
+      if (!mesh.isMesh) return
+      mesh.castShadow = false
+      mesh.receiveShadow = false
+      // The mirrored copy is one object graph away from the camera; culling it
+      // per mesh would fight the single merged world mesh anyway.
+      mesh.frustumCulled = false
+      mesh.renderOrder = -1
     })
-    for (const y of [4.6, 8.2, 11.8, 15.2]) {
+    this.scene.add(mirror)
+    this.reflection = mirror
+  }
+
+  /**
+   * Draws the exported layout: cyan walkable triangles, orange obstacle
+   * footprints.  This is the visual proof that collision and art share one
+   * source, and the tool for finding a gap the exporter missed.
+   */
+  private buildCollisionDebug() {
+    const layout = this.layout
+    if (!layout) return
+    const group = new THREE.Group()
+    group.name = 'CollisionDebug'
+    group.visible = false
+
+    const lift = 0.045
+    const walk: number[] = []
+    const tris = layout.walkable
+    for (let i = 0; i < tris.length; i += 9) {
+      const ax = tris[i]
+      const ay = tris[i + 1]
+      const az = tris[i + 2]
+      const bx = tris[i + 3]
+      const by = tris[i + 4]
+      const bz = tris[i + 5]
+      const cx = tris[i + 6]
+      const cy = tris[i + 7]
+      const cz = tris[i + 8]
+      walk.push(ax, az + lift, -ay, bx, bz + lift, -by)
+      walk.push(bx, bz + lift, -by, cx, cz + lift, -cy)
+      walk.push(cx, cz + lift, -cy, ax, az + lift, -ay)
+    }
+    const walkGeo = new THREE.BufferGeometry()
+    walkGeo.setAttribute('position', new THREE.Float32BufferAttribute(walk, 3))
+    group.add(
+      new THREE.LineSegments(
+        walkGeo,
+        new THREE.LineBasicMaterial({
+          color: 0x4fe3ff,
+          transparent: true,
+          opacity: 0.5,
+          depthTest: false,
+        }),
+      ),
+    )
+
+    const block: number[] = []
+    for (const obstacle of layout.obstacles) {
+      const cos = Math.cos(obstacle.rot)
+      const sin = Math.sin(obstacle.rot)
+      const corners: [number, number, number][] = []
+      for (const [sx, sy] of [
+        [-1, -1],
+        [1, -1],
+        [1, 1],
+        [-1, 1],
+      ] as const) {
+        const lx = sx * obstacle.hx
+        const ly = sy * obstacle.hy
+        const wx = obstacle.x + lx * cos - ly * sin
+        const wy = obstacle.y + lx * sin + ly * cos
+        corners.push([wx, wy, 0])
+      }
+      const base = SCENE.groundZ + 0.06
+      const top = Math.max(base + 0.2, obstacle.top)
+      for (let i = 0; i < 4; i++) {
+        const a = corners[i]
+        const b = corners[(i + 1) % 4]
+        block.push(a[0], base, -a[1], b[0], base, -b[1])
+        block.push(a[0], top, -a[1], b[0], top, -b[1])
+        block.push(a[0], base, -a[1], a[0], top, -a[1])
+      }
+    }
+    const blockGeo = new THREE.BufferGeometry()
+    blockGeo.setAttribute('position', new THREE.Float32BufferAttribute(block, 3))
+    group.add(
+      new THREE.LineSegments(
+        blockGeo,
+        new THREE.LineBasicMaterial({
+          color: 0xff8a4c,
+          transparent: true,
+          opacity: 0.65,
+          depthTest: false,
+        }),
+      ),
+    )
+    group.traverse((o) => {
+      o.renderOrder = 999
+    })
+    this.scene.add(group)
+    this.collisionDebug = group
+  }
+
+  private toggleCollisionDebug() {
+    if (!this.collisionDebug) return
+    this.collisionDebug.visible = !this.collisionDebug.visible
+    this.cb.onToast(
+      this.collisionDebug.visible ? '碰撞可见：青色可行走 · 橙色阻挡' : '碰撞线框已关闭',
+    )
+  }
+
+  private prepareTower(_root: THREE.Object3D) {
+    for (const y of [5, 10, 16, 22, 28]) {
       const sprite = new THREE.Sprite(
         new THREE.SpriteMaterial({
           map: this.glow,
           color: 0xffc98a,
           transparent: true,
-          opacity: 0.16,
+          opacity: 0.14,
           depthWrite: false,
           blending: THREE.AdditiveBlending,
         }),
       )
-      sprite.position.set(98, y, -23)
-      sprite.scale.setScalar(5.2)
+      sprite.position.set(0, y, -78)
+      sprite.scale.setScalar(8)
       this.towerGlow.push(sprite)
       this.scene.add(sprite)
     }
@@ -494,27 +813,27 @@ export class ShangyuanScene {
       blending: THREE.AdditiveBlending,
     })
     const pools: [number, number, number, number][] = []
-    for (let x = 14; x < 172; x += 11) {
-      pools.push([x, 19.2, 8, 0.2])
-      pools.push([x + 5, 23.4, 7, 0.13])
-      if (x > 30) pools.push([x, -19.2, 8, 0.13])
+    for (let y = -126; y <= 162; y += 16) {
+      pools.push([16.4, y, 7, 0.16])
+      pools.push([-16.4, y + 8, 7, 0.1])
     }
-    pools.push([140, -19.6, 13, 0.34])
-    pools.push([124, -22, 8, 0.16])
+    pools.push([0, 10, 12, 0.28])
+    pools.push([0, 78, 16, 0.22])
     for (const [x, y, size, opacity] of pools) {
       const mesh = new THREE.Mesh(geo, mat.clone())
       ;(mesh.material as THREE.MeshBasicMaterial).opacity = opacity
       mesh.rotation.x = -Math.PI / 2
-      mesh.position.set(x, 0.68, -y)
+      mesh.position.set(x, SCENE.groundZ + 0.03, -y)
       mesh.scale.set(size, size, 1)
       this.scene.add(mesh)
     }
   }
 
   private seedAmbientLanterns() {
-    for (let i = 0; i < 22; i++) {
+    for (let i = 0; i < 26; i++) {
       const style = i % 4 === 0 ? 'model-river-lantern-paperboat' : 'model-river-lantern-lotus'
-      this.spawnLantern(style, 16 + i * 7.4, -8.4 + ((i * 5) % 9), 0.4 + (i % 4) * 0.1)
+      const lane = ((i * 7) % 17) - 8
+      this.spawnLantern(style, lane, -128 + i * 11.6, 0.32 + (i % 4) * 0.08)
     }
   }
 
@@ -704,7 +1023,13 @@ export class ShangyuanScene {
   private releaseLantern() {
     const style = LANTERN_STYLES.find((s) => s.name === this.style)
     const id = style?.file ?? 'model-river-lantern-lotus'
-    this.spawnLantern(id, 123.5 + Math.random() * 3, -7.4, 0.42 + Math.random() * 0.16, true)
+    this.spawnLantern(
+      id,
+      this.riverHalf - 1.4 - Math.random() * 1.2,
+      -118,
+      0.42 + Math.random() * 0.16,
+      true,
+    )
     this.released++
     this.phase = 'released'
     this.audio.splash()
@@ -743,13 +1068,23 @@ export class ShangyuanScene {
   setViewpoint(index: number) {
     const v = VIEWPOINTS[index]
     if (!v) return
-    this.player.set(v.pos[0], v.pos[2], -v.pos[1])
     const dx = v.look[0] - v.pos[0]
     const dz = -(v.look[1] - v.pos[1])
     const dy = v.look[2] - v.pos[2]
-    this.yaw = Math.atan2(dz, dx)
-    this.pitch = Math.atan2(dy, Math.hypot(dx, dz))
-    this.camera.position.copy(this.player)
+    const targetYaw = Math.atan2(dz, dx)
+    let turn = targetYaw - this.yaw
+    while (turn > Math.PI) turn -= Math.PI * 2
+    while (turn < -Math.PI) turn += Math.PI * 2
+    this.viewTween = {
+      from: this.player.clone(),
+      to: new THREE.Vector3(v.pos[0], v.pos[2], -v.pos[1]),
+      fromYaw: this.yaw,
+      toYaw: this.yaw + turn,
+      fromPitch: this.pitch,
+      toPitch: Math.atan2(dy, Math.hypot(dx, dz)),
+      t: 0,
+    }
+    this.pan = null
     this.cb.onToast(`机位：${v.name}`)
   }
 
@@ -762,6 +1097,9 @@ export class ShangyuanScene {
       geometries: info.memory.geometries,
       textures: info.memory.textures,
       lanterns: this.lanterns.length,
+      obstacles: this.obstacleField ? this.layout?.obstacles.length : 0,
+      ground: +this.playerGround.toFixed(2),
+      reflection: Boolean(this.reflection),
       phase: this.phase,
       showStage: this.showStage,
     }
@@ -801,8 +1139,14 @@ export class ShangyuanScene {
 
   /** Debug/preview helper: move to a Blender (x, y) spot at walking height. */
   teleport(x: number, y: number) {
-    const g = groundAt(x, y) ?? 0.65
-    this.player.set(x, g + EYE, -y)
+    // A running viewpoint tween would pull the player back to its destination.
+    this.viewTween = null
+    this.pan = null
+    // Debug moves are allowed onto any walkable surface (bridge deck included),
+    // so sample without a rise limit instead of snapping to the nearest quay.
+    const ground = this.groundField?.heightAt(x, y, Number.POSITIVE_INFINITY) ?? SCENE.groundZ
+    this.playerGround = ground
+    this.player.set(x, ground + EYE, -y)
     this.camera.position.copy(this.player)
   }
 
@@ -834,8 +1178,15 @@ export class ShangyuanScene {
   }
 
   private update(dt: number, eventDt = dt) {
-    this.move(dt)
-    this.updatePan(dt)
+    if (this.viewTween) {
+      this.updateViewTween(dt)
+    } else {
+      this.move(dt)
+      this.updatePan(dt)
+      // Steps and the bridge ramp change the ground height under the feet; ease
+      // the eye to it so crossings read as a walk instead of a lift.
+      this.player.y += (this.playerGround + EYE - this.player.y) * Math.min(1, dt * 12)
+    }
     this.camera.position.copy(this.player)
     const dir = new THREE.Vector3(
       Math.cos(this.pitch) * Math.cos(this.yaw),
@@ -845,10 +1196,10 @@ export class ShangyuanScene {
     this.camera.lookAt(this.player.clone().add(dir))
 
     this.waterMat.uniforms.uTime.value += dt
+    this.atmosphere.update(dt)
+    this.grading.uniforms.uTime.value += dt
 
     for (const wheel of this.wheelPivots) wheel.rotation.z += dt * 0.24
-    for (const boat of this.boats)
-      boat.position.y = Math.sin(performance.now() * 0.0005 + boat.position.x) * 0.045
 
     this.updateLanterns(dt)
     this.updateSkyLanterns(dt)
@@ -882,6 +1233,27 @@ export class ShangyuanScene {
     if (this.pan.t <= 0) this.pan = null
   }
 
+  /** Smooth, interruptible move between the authored viewpoints. */
+  private updateViewTween(dt: number) {
+    const tween = this.viewTween
+    if (!tween) return
+    tween.t = Math.min(1.6, tween.t + dt)
+    const raw = tween.t / 1.6
+    const e = raw * raw * (3 - 2 * raw)
+    this.player.lerpVectors(tween.from, tween.to, e)
+    this.yaw = tween.fromYaw + (tween.toYaw - tween.fromYaw) * e
+    this.pitch = tween.fromPitch + (tween.toPitch - tween.fromPitch) * e
+    if (raw >= 1) {
+      this.viewTween = null
+      const ground = this.groundField?.heightAt(
+        this.player.x,
+        -this.player.z,
+        Number.POSITIVE_INFINITY,
+      )
+      if (ground !== undefined && ground !== null) this.playerGround = ground
+    }
+  }
+
   private move(dt: number) {
     if (this.panel) return
     let f = (this.keys.has('KeyW') ? 1 : 0) - (this.keys.has('KeyS') ? 1 : 0)
@@ -903,50 +1275,73 @@ export class ShangyuanScene {
     const fz = Math.sin(this.yaw)
     const rx = -Math.sin(this.yaw)
     const rz = Math.cos(this.yaw)
-    const step = speed * dt
-    const dx = ((f * fx + r * rx) / len) * step
-    const dz = ((f * fz + r * rz) / len) * step
+    const travel = speed * dt
+    const dx = ((f * fx + r * rx) / len) * travel
+    const dz = ((f * fz + r * rz) / len) * travel
 
-    // Try the full step, then each axis on its own, so walls and the bridge edge
-    // let the player slide along them instead of stopping dead.
-    const attempts: [number, number][] = [
-      [dx, dz],
-      [dx, 0],
-      [0, dz],
-    ]
-    for (const [ax, az] of attempts) {
-      if (!ax && !az) continue
-      const nx = this.player.x + ax
-      const nz = this.player.z + az
-      if (blocked(nx, -nz)) continue
-      const g = groundAt(nx, -nz)
-      if (g === null) continue
-      this.player.x = nx
-      this.player.z = nz
-      this.player.y = g + EYE
-      return
+    // Sub-step, then retry each axis alone.  Resolution pushes the circle out
+    // of the obstacle, so the player slides along a shopfront or the bridge
+    // parapet instead of sticking to it.
+    const steps = Math.max(1, Math.ceil(travel / MAX_SUBSTEP))
+    const sx = dx / steps
+    const sz = dz / steps
+    for (let i = 0; i < steps; i++) {
+      if (this.tryStep(sx, sz)) continue
+      const movedX = this.tryStep(sx, 0)
+      const movedZ = this.tryStep(0, sz)
+      if (!movedX && !movedZ) break
     }
+  }
+
+  /**
+   * One sub-step against the exported collision.  The obstacle field resolves
+   * the circle first; the ground field then decides whether the resolved spot
+   * is actually walkable (quay, stair, plaza or bridge deck).  A spot with no
+   * walkable triangle is water, a roof or the far bank, so the step dies there.
+   */
+  private tryStep(dx: number, dz: number): boolean {
+    const nx = this.player.x + dx
+    // Input deltas are game-space (y-up); the obstacle field speaks Blender y.
+    const ny = -this.player.z - dz
+    const resolved = this.obstacleField
+      ? this.obstacleField.resolveCircle(nx, ny, PLAYER_RADIUS, this.playerGround)
+      : { x: nx, y: ny, hit: false }
+    const g = this.groundAt(resolved.x, resolved.y)
+    if (g === null) return false
+    const moved = Math.hypot(resolved.x - this.player.x, resolved.y + this.player.z)
+    if (moved < 1e-4) return false
+    this.player.x = resolved.x
+    this.player.z = -resolved.y
+    this.playerGround = g
+    return true
+  }
+
+  private groundAt(x: number, y: number): number | null {
+    return this.groundField?.heightAt(x, y, this.playerGround, STEP_UP, STEP_DOWN) ?? null
   }
 
   private updateLanterns(dt: number) {
     const xs = this.waterMat.uniforms.uLanternX.value as Float32Array
+    const zs = this.waterMat.uniforms.uLanternZ.value as Float32Array
     const is = this.waterMat.uniforms.uLanternI.value as Float32Array
     xs.fill(0)
+    zs.fill(0)
     is.fill(0)
     for (let i = 0; i < this.lanterns.length; i++) {
       const l = this.lanterns[i]
       l.t += dt
-      l.obj.position.x += l.speed * dt
-      l.obj.position.z = l.lane + Math.sin(l.t * 0.7) * 0.55
+      l.obj.position.z += l.speed * dt
+      l.obj.position.x = l.lane + Math.sin(l.t * 0.7) * 0.55
       l.obj.position.y = 0.08 + Math.sin(l.t * 1.6) * 0.03
       l.obj.rotation.y = Math.sin(l.t * 0.4) * 0.3
       l.halo.position.set(l.obj.position.x, 0.5, l.obj.position.z)
       if (i < 12) {
         xs[i] = l.obj.position.x
+        zs[i] = l.obj.position.z
         is[i] = 0.8 + 0.2 * Math.sin(l.t * 2)
       }
-      if (l.obj.position.x > 202) {
-        l.obj.position.x = 12
+      if (l.obj.position.z > 182) {
+        l.obj.position.z = -140
         l.t = Math.random() * 6
       }
     }
@@ -961,9 +1356,10 @@ export class ShangyuanScene {
       s.positions[p + 1] += s.speeds[i] * dt
       s.positions[p] += s.drifts[i] * dt
       s.positions[p + 2] += Math.sin(t * 0.25 + s.phases[i]) * 0.06 * dt
-      if (s.positions[p + 1] > 72) {
-        s.positions[p + 1] = 14 + Math.random() * 5
-        s.positions[p] = 4 + Math.random() * 178
+      if (s.positions[p + 1] > 62) {
+        s.positions[p + 1] = 12 + Math.random() * 5
+        s.positions[p] = -26 + Math.random() * 52
+        s.positions[p + 2] = -140 + Math.random() * 320
       }
     }
     s.points.geometry.attributes.position.needsUpdate = true
@@ -981,12 +1377,14 @@ export class ShangyuanScene {
     if (t > 0.25 && this.showStage === 0) {
       this.showStage = 1
       this.audio.chime(520)
-      this.panTo(new THREE.Vector3(140, 5, 20), 1.8)
+      // Frame the tower's middle, not its foot: from the quay the lantern
+      // tower is 40 m away and its crown sits above a level camera.
+      this.panTo(new THREE.Vector3(0, 11, -78), 1.8)
       for (let i = 0; i < 14; i++) {
         this.spawnLantern(
           i % 3 === 0 ? 'model-river-lantern-fish' : 'model-river-lantern-lotus',
-          24 + i * 10,
-          -9 + (i % 5) * 4.2,
+          -this.riverHalf * 0.72 + (i % 5) * this.riverHalf * 0.36,
+          -110 + i * 4.2,
           0.3 + (i % 3) * 0.12,
         )
       }
@@ -995,20 +1393,21 @@ export class ShangyuanScene {
     if (t > 1.2 && this.showStage === 1) {
       this.showStage = 2
       this.audio.boom(0.85)
-      this.effects.push(new IronFlower(this.scene, this.glow, new THREE.Vector3(140, 4.6, 20)))
+      this.effects.push(new IronFlower(this.scene, this.glow, new THREE.Vector3(15, 3.6, -88)))
       this.pushHud()
     }
     if (t > 2.6 && this.showStage === 2) {
       this.showStage = 3
       this.effects.push(
-        new ParticleBurst(this.scene, this.glow, new THREE.Vector3(140, 15, 24), {
-          count: 620,
+        new ParticleBurst(this.scene, this.glow, new THREE.Vector3(12, 22, -80), {
+          count: 460,
           color: 0xffc07a,
-          spread: 2,
-          speed: 18,
-          size: 0.3,
-          life: 3.2,
-          gravity: 4,
+          spread: 1.5,
+          speed: 7.5,
+          size: 0.5,
+          life: 2.2,
+          gravity: 2,
+          shell: true,
         }),
       )
       this.audio.boom(0.5)
@@ -1017,25 +1416,27 @@ export class ShangyuanScene {
     if (t > 5.0 && this.showStage === 3) {
       this.showStage = 4
       this.effects.push(
-        new ParticleBurst(this.scene, this.glow, new THREE.Vector3(130, 14, 26), {
-          count: 560,
+        new ParticleBurst(this.scene, this.glow, new THREE.Vector3(-10, 26, -78), {
+          count: 460,
           color: 0xff8f60,
-          spread: 2,
-          speed: 16,
-          size: 0.32,
-          life: 3.2,
-          gravity: 4,
+          spread: 1.5,
+          speed: 7.5,
+          size: 0.5,
+          life: 2.2,
+          gravity: 2,
+          shell: true,
         }),
       )
       this.effects.push(
-        new ParticleBurst(this.scene, this.glow, new THREE.Vector3(152, 14, 24), {
-          count: 480,
+        new ParticleBurst(this.scene, this.glow, new THREE.Vector3(16, 20, -86), {
+          count: 420,
           color: 0xffdfae,
-          spread: 2,
-          speed: 15,
-          size: 0.28,
-          life: 3.2,
-          gravity: 4,
+          spread: 1.5,
+          speed: 7,
+          size: 0.46,
+          life: 2.1,
+          gravity: 2,
+          shell: true,
         }),
       )
       this.audio.boom(0.7)
@@ -1044,31 +1445,33 @@ export class ShangyuanScene {
     if (t > 7.4 && this.showStage === 4) {
       this.showStage = 5
       this.cb.onToast('灯会到了最亮的时候')
-      this.effects.push(new IronFlower(this.scene, this.glow, new THREE.Vector3(147, 5, 22)))
+      this.effects.push(new IronFlower(this.scene, this.glow, new THREE.Vector3(-15, 3.6, -84)))
       this.pushHud()
     }
     if (t > 11.5 && this.showStage === 5) {
       this.showStage = 6
       this.effects.push(
-        new ParticleBurst(this.scene, this.glow, new THREE.Vector3(138, 17, 27), {
-          count: 700,
+        new ParticleBurst(this.scene, this.glow, new THREE.Vector3(-8, 28, -76), {
+          count: 520,
           color: 0xffd8a8,
-          spread: 2,
-          speed: 19,
-          size: 0.3,
-          life: 3.6,
-          gravity: 3.6,
+          spread: 1.5,
+          speed: 8,
+          size: 0.52,
+          life: 2.3,
+          gravity: 1.9,
+          shell: true,
         }),
       )
       this.effects.push(
-        new ParticleBurst(this.scene, this.glow, new THREE.Vector3(150, 13, 23), {
-          count: 620,
+        new ParticleBurst(this.scene, this.glow, new THREE.Vector3(14, 24, -82), {
+          count: 460,
           color: 0xff9a5a,
-          spread: 2,
-          speed: 17,
-          size: 0.32,
-          life: 3.4,
-          gravity: 3.8,
+          spread: 1.5,
+          speed: 7.5,
+          size: 0.5,
+          life: 2.2,
+          gravity: 2,
+          shell: true,
         }),
       )
       this.audio.boom(0.6)
@@ -1076,7 +1479,7 @@ export class ShangyuanScene {
     }
     if (t > 16 && this.showStage === 6) {
       this.showStage = 7
-      this.effects.push(new IronFlower(this.scene, this.glow, new THREE.Vector3(132, 4.8, 19)))
+      this.effects.push(new IronFlower(this.scene, this.glow, new THREE.Vector3(0, 4.8, -40)))
       this.audio.boom(0.7)
       this.pushHud()
     }
@@ -1142,6 +1545,7 @@ export class ShangyuanScene {
     this.effects.forEach((e) => {
       e.dispose(this.scene)
     })
+    this.atmosphere.dispose(this.scene)
     this.audio.dispose()
     this.scene.traverse((o) => {
       const mesh = o as THREE.Mesh
@@ -1153,6 +1557,7 @@ export class ShangyuanScene {
         })
       }
     })
+    this.environmentMap?.dispose()
     this.composer.dispose()
     this.renderer.dispose()
   }

@@ -11,8 +11,8 @@ from pathlib import Path
 import bpy
 from mathutils import Vector
 
-ROOT = Path(__file__).resolve().parents[3]
-OUT = ROOT / "artifacts/shangyuan"
+ROOT = Path(__file__).resolve().parents[2]
+OUT = ROOT / "shangyuan"
 PREFIX = "SYR_"
 
 
