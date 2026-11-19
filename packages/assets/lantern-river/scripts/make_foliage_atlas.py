@@ -239,6 +239,60 @@ def blossom_cluster(rng):
 # Willow strand
 # ---------------------------------------------------------------------------
 
+def shrub_clump(rng):
+    """A rounded leafy clump, for potted plants and low hedges."""
+    verts = []
+    faces = []
+    mats = []
+    tints = []
+
+    leaf_v, leaf_f = petal(0.105, 0.048, 0.020, 0.006, rows=5, cols=4)
+    radius = 0.235
+    lumps = [(rng.uniform(0, math.tau), rng.uniform(0, math.pi),
+              rng.uniform(0.25, 0.5)) for _ in range(4)]
+
+    count = 150
+    for i in range(count):
+        u = (i + 0.5) / count
+        theta = math.acos(1.0 - 2.0 * u)
+        phi = math.tau * i * 0.6180339887
+        n = Vector((math.sin(theta) * math.cos(phi),
+                    math.sin(theta) * math.sin(phi),
+                    math.cos(theta)))
+        r = radius * rng.uniform(0.45, 1.0)
+        for la, lp, lw in lumps:
+            axis = Vector((math.sin(lp) * math.cos(la), math.sin(lp) * math.sin(la),
+                           math.cos(lp)))
+            r += lw * 0.18 * max(0.0, n.dot(axis)) ** 3
+
+        pos = n * r
+        facing = (n + Vector((rng.uniform(-0.5, 0.5), rng.uniform(-0.5, 0.5),
+                              rng.uniform(-0.5, 0.5)))).normalized()
+        quat = facing.to_track_quat("Z", "Y").to_matrix().to_4x4()
+        quat = quat @ Matrix.Rotation(rng.uniform(0, math.tau), 4, "Z")
+        # Leaves grow out of the stem, so tilt them away from the surface
+        # normal instead of laying them flat on it.
+        quat = quat @ Matrix.Rotation(math.radians(rng.uniform(35, 80)), 4, "X")
+        m = Matrix.Translation(pos) @ quat @ Matrix.Scale(rng.uniform(0.75, 1.2), 4)
+        before = len(verts)
+        add_parts(verts, faces, leaf_v, leaf_f, m)
+        mats.extend([0] * len(leaf_f))
+        v = rng.uniform(0.72, 1.18)
+        tints.extend([(v * 0.94, v, v * 0.82)] * (len(verts) - before))
+
+    # A few woody stems break the silhouette at the base.
+    for _ in range(3):
+        start = Vector((rng.uniform(-0.03, 0.03), rng.uniform(-0.03, 0.03), -0.1))
+        end = Vector((rng.uniform(-0.14, 0.14), rng.uniform(-0.14, 0.14),
+                      rng.uniform(-0.02, 0.12)))
+        tv, tf = tube([start, (start + end) * 0.5, end], [0.010, 0.007, 0.004], sides=4)
+        add_parts(verts, faces, tv, tf, Matrix.Identity(4))
+        mats.extend([2] * len(tf))
+        tints.extend([(1.0, 1.0, 1.0)] * len(tf))
+
+    return verts, faces, mats, tints
+
+
 def willow_strand(rng):
     """Three drooping willow branches, dense enough to tile as one card."""
     verts = []
@@ -352,6 +406,13 @@ def build_scene(kind, seed):
             material("Twig", "#4A2A22", 0.85),
         ]
         verts, faces, slots, tints = blossom_cluster(rng)
+    elif kind == "shrub":
+        mats = [
+            material("Leaf", "#8FB25E", 0.66, tint=True),
+            material("LeafB", "#8FB25E", 0.66, tint=True),
+            material("Stem", "#4B3A22", 0.85),
+        ]
+        verts, faces, slots, tints = shrub_clump(rng)
     else:
         mats = [
             material("Leaf", "#A6C486", 0.66, tint=True),
@@ -442,7 +503,7 @@ def render_atlas(kind, out_dir):
 
 def main():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    kinds = argv if argv else ["blossom", "willow"]
+    kinds = argv if argv else ["blossom", "willow", "shrub"]
     os.makedirs(OUT_DIR, exist_ok=True)
     for kind in kinds:
         print("FOLIAGE_ATLAS", render_atlas(kind, OUT_DIR))

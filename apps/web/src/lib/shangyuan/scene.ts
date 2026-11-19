@@ -57,6 +57,9 @@ export class ShangyuanScene {
   private readonly audio = new ShangyuanAudio()
 
   private readonly waterMat: THREE.ShaderMaterial
+  private worldReady = false
+  private shadowFrames = 0
+  private shadowFrozen = false
   private reflection: THREE.Object3D | null = null
   private environmentMap: THREE.Texture | null = null
   private readonly glow: THREE.Texture
@@ -690,6 +693,7 @@ export class ShangyuanScene {
     this.addGroundGlow()
     this.seedAmbientLanterns()
     this.pushHud()
+    this.worldReady = true
     this.cb.onReady()
     this.loop()
   }
@@ -1263,6 +1267,17 @@ export class ShangyuanScene {
     this.update(Math.min(raw, 0.05), Math.min(raw, 0.3))
     this.renderer.info.reset()
     this.composer.render()
+
+    // The moon is the only shadow caster and the level never moves, so the
+    // shadow map only has to be drawn once the world is in place.  Freezing it
+    // removes the whole million-triangle depth pass from every later frame.
+    if (this.worldReady && !this.shadowFrozen) {
+      this.shadowFrames += 1
+      if (this.shadowFrames > 2) {
+        this.renderer.shadowMap.autoUpdate = false
+        this.shadowFrozen = true
+      }
+    }
   }
 
   private update(dt: number, eventDt = dt) {

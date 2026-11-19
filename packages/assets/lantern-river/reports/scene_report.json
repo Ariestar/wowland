@@ -1,9 +1,9 @@
 {
   "scene": "SM_Scene_LanternRiver_Night",
   "blend": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\SM_Scene_LanternRiver_Night.blend",
-  "mesh_objects": 5019,
-  "triangles": 1056251,
-  "materials": 74,
+  "mesh_objects": 4992,
+  "triangles": 1054811,
+  "materials": 75,
   "lights": 97,
   "cameras": [
     "CAM_Boat",

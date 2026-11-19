@@ -15,7 +15,10 @@
     "verify": "pnpm check && pnpm build",
     "verify:visual": "pnpm --filter @wowland/web exec node scripts/shangyuan/capture.cjs",
     "verify:flow": "pnpm --filter @wowland/web exec node scripts/shangyuan/playtest.cjs",
-    "verify:mobile": "pnpm --filter @wowland/web exec node scripts/shangyuan/mobile.cjs"
+    "verify:mobile": "pnpm --filter @wowland/web exec node scripts/shangyuan/mobile.cjs",
+    "assets:atlas": "node scripts/assets/build-world.mjs --atlas --export",
+    "assets:export": "node scripts/assets/build-world.mjs --export",
+    "assets:build": "node scripts/assets/build-world.mjs --atlas"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.8"

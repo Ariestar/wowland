@@ -22,6 +22,7 @@ from mathutils import Matrix, Vector
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSET_DIR = os.path.dirname(HERE)
+FOLIAGE_DIR = os.path.join(ASSET_DIR, "textures")
 EXPORT_DIR = os.path.join(ASSET_DIR, "exports")
 RENDER_DIR = os.path.join(ASSET_DIR, "renders", "raw")
 REPORT_DIR = os.path.join(ASSET_DIR, "reports")
@@ -115,6 +116,51 @@ def principled(name, hex_base, roughness=0.5, metallic=0.0, emission=None,
         nt.links.new(bmp.outputs["Normal"], bsdf.inputs["Normal"])
     mat.diffuse_color = (*srgb(hex_base), alpha)
     return mat
+
+
+def card_material(name, atlas, glow, glow_strength):
+    """A double-sided alpha-cut foliage card.
+
+    The atlas holds four clusters in a 2 x 2 grid; every card picks one tile in
+    its UVs, so a whole canopy needs one material and one draw call.  The same
+    image drives emission, which keeps the blossoms glowing in their own colours
+    instead of washing out to a flat pink.
+    """
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    nt = mat.node_tree
+    bsdf = nt.nodes.get("Principled BSDF")
+    bsdf.inputs["Roughness"].default_value = 0.8
+    bsdf.inputs["Metallic"].default_value = 0.0
+    bsdf.inputs["Emission Strength"].default_value = glow_strength
+    bsdf.inputs["Emission Color"].default_value = (*srgb(glow), 1.0)
+
+    uv = nt.nodes.new("ShaderNodeUVMap")
+    uv.uv_map = "UVMap"
+    image = bpy.data.images.load(os.path.join(FOLIAGE_DIR, atlas), check_existing=True)
+    image.colorspace_settings.name = "sRGB"
+    tex = nt.nodes.new("ShaderNodeTexImage")
+    tex.image = image
+    tex.extension = "CLIP"
+    tex.interpolation = "Linear"
+    nt.links.new(uv.outputs["UV"], tex.inputs["Vector"])
+    nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    nt.links.new(tex.outputs["Color"], bsdf.inputs["Emission Color"])
+    nt.links.new(tex.outputs["Alpha"], bsdf.inputs["Alpha"])
+
+    mat.blend_method = "CLIP"
+    mat.alpha_threshold = 0.5
+    mat.use_backface_culling = False
+    return mat
+
+
+# Rendered from 3D clusters by scripts/make_foliage_atlas.py.
+MAT_BLOSSOM_CARD = card_material("MAT_SCENE_BlossomCard", "blossom_atlas.png",
+                                 "#FFC2D8", 0.55)
+MAT_WILLOW_CARD = card_material("MAT_SCENE_WillowCard", "willow_atlas.png",
+                                "#A8CC78", 0.16)
+MAT_SHRUB_CARD = card_material("MAT_SCENE_ShrubCard", "shrub_atlas.png",
+                               "#9DBE6A", 0.12)
 
 
 def emission_material(name, hex_color, strength):
@@ -352,6 +398,68 @@ def recalc_normals(obj):
     bm.to_mesh(obj.data)
     bm.free()
     obj.data.update()
+
+
+def make_card_object(name, cards, material, collection):
+    """Build one mesh from many quads, each sampling one tile of the atlas.
+
+    `cards` holds (centre, size, rotation, tile, spin, flip).  A small UV inset
+    keeps mipmaps from bleeding the neighbouring tile into the card.
+    """
+    verts = []
+    faces = []
+    uvs = []
+    inset = 0.006
+    span = 0.5 - inset * 2.0
+    corners = ((-1, -1), (1, -1), (1, 1), (-1, 1))
+    quad_uv = ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0))
+
+    for centre, size, rotation, tile, spin, flip in cards:
+        base = len(verts)
+        for cx, cz in corners:
+            local = Vector((cx * size * 0.5, 0.0, cz * size * 0.5))
+            verts.append(tuple(centre + rotation @ local))
+        faces.append((base, base + 1, base + 2, base + 3))
+
+        u0 = (tile % 2) * 0.5 + inset
+        v0 = (tile // 2) * 0.5 + inset
+        order = list(quad_uv[spin:] + quad_uv[:spin])
+        if flip:
+            order = order[::-1]
+        for lu, lv in order:
+            uvs.append((u0 + lu * span, v0 + lv * span))
+
+    mesh = bpy.data.meshes.new(name + "_mesh")
+    mesh.from_pydata(verts, [], faces)
+    mesh.update()
+    layer = mesh.uv_layers.new(name="UVMap")
+    for index, uv in enumerate(uvs):
+        layer.data[index].uv = uv
+    obj = bpy.data.objects.new(name, mesh)
+    collection.objects.link(obj)
+    obj.data.materials.append(material)
+    return obj
+
+
+def _card_rotation(rng, upright=False, facing=0.0):
+    if upright:
+        return Matrix.Rotation(facing + rng.uniform(-0.6, 0.6), 3, "Z")
+    return (Matrix.Rotation(rng.uniform(0, math.tau), 3, "Z")
+            @ Matrix.Rotation(rng.uniform(0, math.tau), 3, "Y")
+            @ Matrix.Rotation(rng.uniform(0, math.tau), 3, "X"))
+
+
+def build_shrub(name, centre, size=0.9, count=9, seed=0, collection=None):
+    """A leafy clump built from cards; replaces the old ball-shaped plant."""
+    rng = random.Random(seed)
+    cards = []
+    for _ in range(count):
+        offset = Vector((rng.uniform(-0.20, 0.20), rng.uniform(-0.20, 0.20),
+                         rng.uniform(-0.14, 0.20))) * (size / 0.9)
+        cards.append((Vector(centre) + offset, size * rng.uniform(0.85, 1.15),
+                      _card_rotation(rng), rng.randrange(4), rng.randrange(4),
+                      rng.random() < 0.5))
+    make_card_object(name, cards, MAT_SHRUB_CARD, collection)
 
 
 def add_curve_tube(name, points, radius, material, collection, resolution_u=2,
@@ -1436,8 +1544,8 @@ for i, (x, y) in enumerate(((17.0, -126.0), (15.2, -114.0),
                             (24.0, 50.0), (24.0, 74.0))):
     add_cylinder(f"PROP_Pot_{i}", 8, 0.28, 0.42,
                  (x, y, GROUND_Z + 0.21), MAT_LR_Stone_Light, COL_PROPS)
-    add_sphere(f"PROP_PotPlant_{i}", 0.36, (x, y, GROUND_Z + 0.72),
-               MAT_WILLOW, COL_PROPS, segments=6, rings=4)
+    build_shrub(f"PROP_PotPlant_{i}", (x, y, GROUND_Z + 0.80), size=0.95,
+                count=9, seed=SEED + i * 7, collection=COL_PROPS)
 
 # A handful of people on the street, mostly silhouettes with a warm lantern.
 for i, (x, y) in enumerate(((0.0, -8.0), (0.0, 28.0), (16.0, -100.0),
@@ -1535,8 +1643,8 @@ for i, (x, y) in enumerate(((17.0, -92.0), (15.2, -70.0), (-17.0, -44.0),
                             (-17.0, 118.0), (-15.2, 158.0))):
     add_cylinder(f"PROP_PotExtra_{i}", 8, 0.28, 0.42,
                  (x, y, GROUND_Z + 0.21), MAT_LR_Stone_Light, COL_PROPS)
-    add_sphere(f"PROP_PotExtraPlant_{i}", 0.36, (x, y, GROUND_Z + 0.72),
-               MAT_WILLOW, COL_PROPS, segments=6, rings=4)
+    build_shrub(f"PROP_PotExtraPlant_{i}", (x, y, GROUND_Z + 0.80), size=0.95,
+                count=9, seed=SEED + 300 + i * 7, collection=COL_PROPS)
 for i, y in enumerate((-136.0, -54.0, 36.0, 124.0)):
     for side in (-1, 1):
         add_bench(f"PROP_BenchExtra_{'R' if side > 0 else 'L'}_{i}",
@@ -1861,50 +1969,6 @@ add_point_light("LGT_FerryDock_W", (-15.0, -90.0, 3.0), "#FFB066", 70.0, 3.0)
 # Cherry trees, willows and their foliage cards
 # ---------------------------------------------------------------------------
 
-FOLIAGE_DIR = os.path.join(ASSET_DIR, "textures")
-
-
-def card_material(name, atlas, glow, glow_strength):
-    """A double-sided alpha-cut foliage card.
-
-    The atlas holds four clusters in a 2 x 2 grid; every card picks one tile in
-    its UVs, so a whole canopy needs one material and one draw call.  The same
-    image drives emission, which keeps the blossoms glowing in their own colours
-    instead of washing out to a flat pink.
-    """
-    mat = bpy.data.materials.new(name)
-    mat.use_nodes = True
-    nt = mat.node_tree
-    bsdf = nt.nodes.get("Principled BSDF")
-    bsdf.inputs["Roughness"].default_value = 0.8
-    bsdf.inputs["Metallic"].default_value = 0.0
-    bsdf.inputs["Emission Strength"].default_value = glow_strength
-    bsdf.inputs["Emission Color"].default_value = (*srgb(glow), 1.0)
-
-    uv = nt.nodes.new("ShaderNodeUVMap")
-    uv.uv_map = "UVMap"
-    image = bpy.data.images.load(os.path.join(FOLIAGE_DIR, atlas), check_existing=True)
-    image.colorspace_settings.name = "sRGB"
-    tex = nt.nodes.new("ShaderNodeTexImage")
-    tex.image = image
-    tex.extension = "CLIP"
-    tex.interpolation = "Linear"
-    nt.links.new(uv.outputs["UV"], tex.inputs["Vector"])
-    nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
-    nt.links.new(tex.outputs["Color"], bsdf.inputs["Emission Color"])
-    nt.links.new(tex.outputs["Alpha"], bsdf.inputs["Alpha"])
-
-    mat.blend_method = "CLIP"
-    mat.alpha_threshold = 0.5
-    mat.use_backface_culling = False
-    return mat
-
-
-# Rendered from 3D clusters by scripts/make_foliage_atlas.py.
-MAT_BLOSSOM_CARD = card_material("MAT_SCENE_BlossomCard", "blossom_atlas.png",
-                                 "#FFC2D8", 0.55)
-MAT_WILLOW_CARD = card_material("MAT_SCENE_WillowCard", "willow_atlas.png",
-                                "#A8CC78", 0.16)
 
 
 def add_tube_geometry(verts, faces, points, radii, sides=6):
@@ -1960,47 +2024,6 @@ def make_tube_object(name, verts, faces, material, collection):
     return obj
 
 
-def make_card_object(name, cards, material, collection):
-    """Build one mesh from many quads, each sampling one tile of the atlas.
-
-    `cards` holds (centre, size, rotation, tile, spin, flip).  A small UV inset
-    keeps mipmaps from bleeding the neighbouring tile into the card.
-    """
-    verts = []
-    faces = []
-    uvs = []
-    inset = 0.006
-    span = 0.5 - inset * 2.0
-    corners = ((-1, -1), (1, -1), (1, 1), (-1, 1))
-    quad_uv = ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0))
-
-    for centre, size, rotation, tile, spin, flip in cards:
-        base = len(verts)
-        for cx, cz in corners:
-            local = Vector((cx * size * 0.5, 0.0, cz * size * 0.5))
-            verts.append(tuple(centre + rotation @ local))
-        faces.append((base, base + 1, base + 2, base + 3))
-
-        u0 = (tile % 2) * 0.5 + inset
-        v0 = (tile // 2) * 0.5 + inset
-        order = list(quad_uv[spin:] + quad_uv[:spin])
-        if flip:
-            order = order[::-1]
-        for lu, lv in order:
-            uvs.append((u0 + lu * span, v0 + lv * span))
-
-    mesh = bpy.data.meshes.new(name + "_mesh")
-    mesh.from_pydata(verts, [], faces)
-    mesh.update()
-    layer = mesh.uv_layers.new(name="UVMap")
-    for index, uv in enumerate(uvs):
-        layer.data[index].uv = uv
-    obj = bpy.data.objects.new(name, mesh)
-    collection.objects.link(obj)
-    obj.data.materials.append(material)
-    return obj
-
-
 def _polyline(start, direction, length, steps, rng, spread):
     """Walk a wobbly polyline, so limbs bend instead of being straight sticks."""
     points = [start]
@@ -2018,14 +2041,6 @@ def _point_on(points, t):
     x = min(span - 1e-4, max(0.0, t * span))
     index = int(x)
     return points[index].lerp(points[index + 1], x - index)
-
-
-def _card_rotation(rng, upright=False, facing=0.0):
-    if upright:
-        return Matrix.Rotation(facing + rng.uniform(-0.6, 0.6), 3, "Z")
-    return (Matrix.Rotation(rng.uniform(0, math.tau), 3, "Z")
-            @ Matrix.Rotation(rng.uniform(0, math.tau), 3, "Y")
-            @ Matrix.Rotation(rng.uniform(0, math.tau), 3, "X"))
 
 
 def build_cherry_tree(name, location, scale=1.0, seed=0):
@@ -2181,12 +2196,13 @@ def build_bamboo(name, location, scale=1.0, seed=0):
         y = base.y + math.sin(angle) * radius
         add_cylinder(f"{name}_Stalk_{i}", 6, 0.035 * scale, height,
                      (x, y, base.z + height / 2.0), MAT_WILLOW, COL_TREES)
-        for j in range(3):
-            add_sphere(f"{name}_Leaf_{i}_{j}", rng.uniform(0.18, 0.32) * scale,
-                       (x + rng.uniform(-0.5, 0.5) * scale,
-                        y + rng.uniform(-0.5, 0.5) * scale,
-                        base.z + height * (0.55 + 0.15 * j)),
-                       MAT_WILLOW, COL_TREES, segments=5, rings=3)
+        for j in range(2):
+            build_shrub(f"{name}_Leaf_{i}_{j}",
+                        (x + rng.uniform(-0.35, 0.35) * scale,
+                         y + rng.uniform(-0.35, 0.35) * scale,
+                         base.z + height * (0.68 + 0.16 * j)),
+                        size=1.05 * scale, count=4,
+                        seed=SEED + 900 + i * 17 + j, collection=COL_TREES)
 
 
 # Trees stand on the promenade, not inside the shop volumes: x = ±17.7 leaves
