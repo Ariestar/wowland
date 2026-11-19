@@ -20,6 +20,9 @@
     "verify:limits": "pnpm --filter @wowland/web exec node scripts/shangyuan/limits.cjs",
     "verify:states": "pnpm --filter @wowland/web exec node scripts/shangyuan/states.cjs",
     "verify:retry": "pnpm --filter @wowland/web exec node scripts/shangyuan/retry.cjs",
+    "verify:landscape": "pnpm --filter @wowland/web exec node scripts/shangyuan/landscape.cjs",
+    "verify:touch": "pnpm --filter @wowland/web exec node scripts/shangyuan/touch.cjs",
+    "verify:soak": "pnpm --filter @wowland/web exec node scripts/shangyuan/soak.cjs",
     "assets:atlas": "node scripts/assets/build-world.mjs --atlas --export",
     "assets:export": "node scripts/assets/build-world.mjs --export",
     "assets:build": "node scripts/assets/build-world.mjs --atlas"

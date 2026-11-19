@@ -21,9 +21,16 @@ pnpm build
 浏览器验收脚本需要先启动 `pnpm dev`：
 
 ```bash
-pnpm verify:visual
-pnpm verify:flow
-pnpm verify:mobile
+pnpm verify:visual     # 截图
+pnpm verify:flow       # 主线全流程
+pnpm verify:mobile     # 手机竖屏
+pnpm verify:states     # 锁定/重复交互/失焦恢复
+pnpm verify:retry      # 加载失败与原地重试
+pnpm verify:combos     # 3 款 × 4 祝词 = 12 组合
+pnpm verify:limits     # 5 盏上限、冷却、60s 回收（约 2–3 分钟）
+pnpm verify:landscape  # 横屏手机完整主线
+pnpm verify:touch      # 触屏按住/取消/拖拽视角
+pnpm verify:soak       # 连续游玩压测（默认 3 分钟，SOAK_MINUTES=10 跑验收版）
 ```
 
 `SITE_URL` 可以指定其他预览地址。
