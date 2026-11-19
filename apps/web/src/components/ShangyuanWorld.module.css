@@ -196,6 +196,23 @@
   cursor: default;
 }
 
+.retry {
+  margin-top: 2px;
+  padding: 9px 22px;
+  border: 1px solid rgba(241, 200, 138, 0.4);
+  background: rgba(255, 190, 110, 0.08);
+  color: #ffe4bb;
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  cursor: pointer;
+}
+
+.retry:hover {
+  background: rgba(255, 190, 110, 0.2);
+  border-color: rgba(255, 225, 175, 0.9);
+}
+
 .note {
   font-size: 11px;
   letter-spacing: 0.14em;
