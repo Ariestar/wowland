@@ -50,11 +50,23 @@ const MAX = 5
   await page.waitForTimeout(600)
 
   const releases = []
+  let cooldownBlocked = false
   for (let i = 0; i < MAX; i++) {
     const ok = await openPanelAndRelease()
     await page.waitForTimeout(1700)
     const s = await stats()
     releases.push({ i: i + 1, ok, count: s.releaseCount, active: s.playerLanterns })
+    if (i === 0) {
+      // Immediately after a release the 10 s cooldown must refuse another one.
+      await page.keyboard.press('e')
+      await page.waitForTimeout(350)
+      const panelDuringCooldown = await page.evaluate(
+        () => !!document.querySelector('[class*="panelWrap"]'),
+      )
+      const toastDuringCooldown = await toast()
+      cooldownBlocked = !panelDuringCooldown && /再等/.test(toastDuringCooldown)
+      await shot('00-cooldown-refused')
+    }
     if (i < MAX - 1) await page.waitForTimeout(COOLDOWN_WAIT)
   }
   await shot('01-five-active')
@@ -94,6 +106,7 @@ const MAX = 5
   const checks = {
     fiveReleases: releases.length === MAX && releases.every((r) => r.ok),
     countsIncrease: releases.every((r, i) => r.count === i + 1),
+    cooldownRejected: cooldownBlocked,
     activeNeverExceededCap: releases.every((r) => r.active <= MAX),
     recycledAtLeastOnce: recycled !== null,
     rereleaseAllowed: rerelease === true && final.releaseCount >= MAX + 1,
