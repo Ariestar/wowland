@@ -17,6 +17,7 @@ import struct
 import sys
 from pathlib import Path
 
+import bmesh
 import bpy
 from mathutils import Vector
 
@@ -200,6 +201,40 @@ def dedupe_materials(obj: bpy.types.Object) -> None:
         obj.data.materials.append(material)
     for polygon, old_index in zip(obj.data.polygons, old_indices):
         polygon.material_index = remap.get(old_index, 0)
+
+
+def cull_closed_shell_materials(world: bpy.types.Object) -> tuple[int, int]:
+    """Enable backface culling only on materials that cover closed shells.
+
+    A closed manifold shell never shows a back face from outside, so culling it
+    is invisible while halving the fragments the merged world rasterises.  Open
+    geometry (foliage cards, banners, roof shells) must stay double sided, so
+    every material is judged by the faces that use it: a boundary or
+    non-manifold edge makes all materials touching that edge unsafe.
+    """
+    slots = [slot.material for slot in world.material_slots]
+    risky: set[int] = set()
+    bm = bmesh.new()
+    bm.from_mesh(world.data)
+    for edge in bm.edges:
+        faces = edge.link_faces
+        if len(faces) == 2:
+            continue
+        for face in faces:
+            risky.add(face.material_index)
+    bm.free()
+
+    culled = 0
+    for index, material in enumerate(slots):
+        if material is None or index in risky:
+            continue
+        material.use_backface_culling = True
+        culled += 1
+    print(
+        "LR_WEB_BACKFACE_CULL",
+        {"materials": len(slots), "culled": culled, "double_sided": len(slots) - culled},
+    )
+    return culled, len(slots) - culled
 
 
 # ---------------------------------------------------------------------------
@@ -606,6 +641,7 @@ def main() -> None:
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
     add_detail_uv(world)
     dedupe_materials(world)
+    culled, double_sided = cull_closed_shell_materials(world)
 
     world.data.calc_loop_triangles()
     out = Path(args.out)
@@ -635,6 +671,8 @@ def main() -> None:
             "objects_merged": len(objects),
             "triangles": len(world.data.loop_triangles),
             "materials": len(world.data.materials),
+            "culled_materials": culled,
+            "double_sided_materials": double_sided,
             "textured_materials": textured,
             "images": len({image.name for image in bpy.data.images if image.users}),
             "bytes": out.stat().st_size,
