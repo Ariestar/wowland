@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import struct
 import sys
 from pathlib import Path
 
@@ -126,20 +127,30 @@ def wire_pbr_textures() -> int:
             uv = nt.nodes.new("ShaderNodeUVMap")
             uv.uv_map = DETAIL_UV
 
+        # Fine-grained materials (bark) need a tighter repeat than the shared
+        # 2.4 m detail tile, so each material can scale the shared UV.
+        uv_out = uv.outputs["UV"]
+        uv_scale = float(spec.get("uv_scale", 1.0))
+        if uv_scale != 1.0:
+            mapping = nt.nodes.new("ShaderNodeMapping")
+            mapping.inputs["Scale"].default_value = (uv_scale, uv_scale, 1.0)
+            nt.links.new(uv.outputs["UV"], mapping.inputs["Vector"])
+            uv_out = mapping.outputs["Vector"]
+
         base = _image_node(nt, ROOT / spec["base_color"], "sRGB")
-        nt.links.new(uv.outputs["UV"], base.inputs["Vector"])
+        nt.links.new(uv_out, base.inputs["Vector"])
         nt.links.new(base.outputs["Color"], bsdf.inputs["Base Color"])
 
         normal_map = _image_node(nt, ROOT / spec["normal"], "Non-Color")
         normal_node = nt.nodes.new("ShaderNodeNormalMap")
         normal_node.inputs["Strength"].default_value = 1.0
-        nt.links.new(uv.outputs["UV"], normal_map.inputs["Vector"])
+        nt.links.new(uv_out, normal_map.inputs["Vector"])
         nt.links.new(normal_map.outputs["Color"], normal_node.inputs["Color"])
         nt.links.new(normal_node.outputs["Normal"], bsdf.inputs["Normal"])
 
         rough_map = _image_node(nt, ROOT / spec["roughness"], "Non-Color")
         separate = nt.nodes.new("ShaderNodeSeparateColor")
-        nt.links.new(uv.outputs["UV"], rough_map.inputs["Vector"])
+        nt.links.new(uv_out, rough_map.inputs["Vector"])
         nt.links.new(rough_map.outputs["Color"], separate.inputs["Color"])
         nt.links.new(separate.outputs["Green"], bsdf.inputs["Roughness"])
         wired += 1
@@ -391,12 +402,22 @@ def build_layout() -> dict:
             add_obstacle(name, obj, 0.05, "building")
         elif name.startswith("PROP_Stall_"):
             add_obstacle(name, obj, 0.05, "stall")
-        elif name.startswith("PROP_CherryTree_") and name.endswith("_Trunk"):
+        elif name.startswith(("PROP_CherryTree_", "PROP_WillowTree_")) and name.endswith("_Trunk"):
             add_obstacle(name, obj, 0.02, "tree")
         elif name.startswith("PROP_QuayPost_"):
             add_obstacle(name, obj, 0.0, "post")
         elif name.startswith("PROP_PalaceLantern_"):
             add_obstacle(name, obj, 0.05, "lantern")
+        elif name.startswith("PROP_PerformanceStage"):
+            add_obstacle(name, obj, 0.05, "stage")
+        elif name.startswith("PROP_TeaCart_") and name.endswith("_Body"):
+            add_obstacle(name, obj, 0.05, "cart")
+        elif name.startswith("PROP_LanternRack_") and "_Post_" in name:
+            add_obstacle(name, obj, 0.0, "post")
+        elif name.startswith("PROP_StoneLantern_") and name.endswith("_Base"):
+            add_obstacle(name, obj, 0.0, "post")
+        elif name.startswith("PROP_ApproachPole_"):
+            add_obstacle(name, obj, 0.0, "post")
         elif name == "LM_Paifang":
             # A gate is mostly open space: block only the columns, never the
             # whole bounding box, or the street entrance becomes a wall.
@@ -498,6 +519,45 @@ def build_layout() -> dict:
     }
 
 
+def force_alpha_mask(path: Path, suffixes: tuple[str, ...]) -> int:
+    """Rewrite alpha-cutout materials to glTF MASK.
+
+    Blender 5.3 no longer honours `blend_method`, so every material with a
+    linked alpha exports as alphaMode BLEND.  For foliage cards that is wrong:
+    BLEND disables depth writes and hundreds of overlapping quads sort against
+    each other.  Patch the JSON chunk instead of fighting the exporter.
+    """
+    data = path.read_bytes()
+    magic, version, total = struct.unpack_from("<III", data, 0)
+    chunks: list[tuple[int, bytes]] = []
+    offset = 12
+    while offset < total:
+        length, kind = struct.unpack_from("<II", data, offset)
+        chunks.append((kind, data[offset + 8: offset + 8 + length]))
+        offset += 8 + length
+
+    patched = 0
+    rebuilt = []
+    for kind, payload in chunks:
+        if kind == 0x4E4F534A:  # 'JSON'
+            doc = json.loads(payload.decode("utf-8"))
+            for material in doc.get("materials", []):
+                if any(material.get("name", "").endswith(s) for s in suffixes):
+                    material["alphaMode"] = "MASK"
+                    material["alphaCutoff"] = 0.45
+                    patched += 1
+            payload = json.dumps(doc, separators=(",", ":")).encode("utf-8")
+            payload += b" " * ((4 - len(payload) % 4) % 4)
+        else:
+            payload += b"\x00" * ((4 - len(payload) % 4) % 4)
+        rebuilt.append((kind, payload))
+
+    body = b"".join(struct.pack("<II", len(p), k) + p for k, p in rebuilt)
+    path.write_bytes(struct.pack("<III", magic, version, 12 + len(body)) + body)
+    print("LR_WEB_ALPHA_MASK", patched)
+    return patched
+
+
 def export_layout(path: Path) -> dict:
     layout = build_layout()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -568,6 +628,7 @@ def main() -> None:
         export_draco_normal_quantization=10,
         export_draco_texcoord_quantization=12,
     )
+    force_alpha_mask(out, ("Card",))
     print(
         "LR_WEB_WORLD_OK",
         {

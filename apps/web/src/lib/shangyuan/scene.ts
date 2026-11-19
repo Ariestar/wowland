@@ -20,7 +20,7 @@ import {
 import { type Effect, IronFlower, ParticleBurst, Ripple, RiverAtmosphere } from './effects'
 import { gradingShader, sanitizeShader } from './postFx'
 import type { Panel, Phase, SceneCallbacks } from './types'
-import { createWaterMaterial, glowTexture, skyLanternTexture } from './water'
+import { batTexture, createWaterMaterial, glowTexture, skyLanternTexture } from './water'
 
 const MODEL_BASE = '/models/lantern-river/'
 const TEMPLATE_BASE = '/models/shangyuan/'
@@ -105,6 +105,7 @@ export class ShangyuanScene {
   private showClock = -1
   private showStage = 0
   private autoShow = -1
+  private nextFirework = 5
   private towerPulse = 0
   private nearby: InteractableId | null = null
   private panel: Panel | null = null
@@ -159,13 +160,15 @@ export class ShangyuanScene {
     water.renderOrder = -2
     this.scene.add(water)
 
-    this.atmosphere = new RiverAtmosphere(this.glow)
+    this.atmosphere = new RiverAtmosphere(this.glow, batTexture())
     this.scene.add(this.atmosphere.object)
 
     this.composer = new EffectComposer(this.renderer)
     this.composer.addPass(new RenderPass(this.scene, this.camera))
     this.composer.addPass(new ShaderPass(sanitizeShader()))
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.48, 0.55, 0.7)
+    // A higher threshold keeps the lantern cores hot while the shoji walls stay
+    // crisp; a low threshold turned the whole midground into warm haze.
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.62, 0.55, 0.85)
     this.composer.addPass(this.bloom)
     this.composer.addPass(new OutputPass())
     this.grading = new ShaderPass(gradingShader())
@@ -278,8 +281,8 @@ export class ShangyuanScene {
           c = mix(c, uTop, smoothstep(0.26, 0.9, h));
           // The festival sits under a low cobalt band: a cool horizon keeps the
           // sky from reading as flat black above a lantern-lit street.
-          float band = exp(-pow((h - 0.02) * 9.0, 2.0));
-          c += uHaze * band * 0.32;
+          float band = exp(-pow((h - 0.06) * 5.5, 2.0));
+          c += uHaze * band * 0.42;
           float warm = exp(-pow((h - 0.004) * 30.0, 2.0));
           c += vec3(0.22, 0.09, 0.1) * warm * 0.24;
           float d = max(dot(vDir, uMoon), 0.0);
@@ -308,10 +311,10 @@ export class ShangyuanScene {
     const stars = new THREE.Points(
       geo,
       new THREE.PointsMaterial({
-        size: 1.5,
+        size: 2.1,
         color: 0xdfe8ff,
         transparent: true,
-        opacity: 0.85,
+        opacity: 0.92,
         depthWrite: false,
       }),
     )
@@ -346,21 +349,46 @@ export class ShangyuanScene {
     const clusterStars = new THREE.Points(
       clusterGeo,
       new THREE.PointsMaterial({
-        size: 1.3,
+        size: 1.8,
         color: 0xbcd8ff,
         transparent: true,
-        opacity: 0.8,
+        opacity: 0.9,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
       }),
     )
     clusterStars.frustumCulled = false
     this.scene.add(clusterStars)
+
+    // A crisp moon disc plus a soft halo, aligned with the sky shader's moon
+    // direction so the water and roof tiles reflect the same source.
+    const moonDir = new THREE.Vector3(-0.42, 0.52, 0.42).normalize()
+    const moon = new THREE.Mesh(
+      new THREE.SphereGeometry(5.2, 16, 12),
+      new THREE.MeshBasicMaterial({ color: 0xf3f7ff }),
+    )
+    moon.position.copy(moonDir).multiplyScalar(520)
+    this.scene.add(moon)
+    const halo = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: this.glow,
+        color: 0xbcd4ff,
+        transparent: true,
+        opacity: 0.5,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
+    )
+    halo.position.copy(moon.position)
+    halo.scale.setScalar(48)
+    this.scene.add(halo)
   }
 
   /** Drifting wish lanterns: warm bokeh above the roofline, the scene's signature. */
   private addSkyLanterns() {
-    const count = 88
+    // A dense drift of wish lanterns is the reference's signature; keep them
+    // small and high so they read as depth instead of near-camera blobs.
+    const count = 220
     const positions = new Float32Array(count * 3)
     const sizes = new Float32Array(count)
     const colors = new Float32Array(count * 3)
@@ -370,10 +398,10 @@ export class ShangyuanScene {
     const warm = new THREE.Color('#ffd9a0')
     const amber = new THREE.Color('#ffb877')
     for (let i = 0; i < count; i++) {
-      positions[i * 3] = -26 + Math.random() * 52
-      positions[i * 3 + 1] = 12 + Math.random() * 44
-      positions[i * 3 + 2] = -140 + Math.random() * 320
-      sizes[i] = 0.42 + Math.random() * 0.62
+      positions[i * 3] = -45 + Math.random() * 90
+      positions[i * 3 + 1] = 14 + Math.random() * 56
+      positions[i * 3 + 2] = -160 + Math.random() * 360
+      sizes[i] = 0.28 + Math.random() * 0.48
       const c = i % 6 === 0 ? amber : warm
       colors[i * 3] = c.r
       colors[i * 3 + 1] = c.g
@@ -422,16 +450,18 @@ export class ShangyuanScene {
     // Mirrors the lookdev rig: a low blue world, a weak moon key, and a regular
     // rhythm of warm practicals.  The paper windows carry their own emission;
     // these lights give the plaster, timber and stone something to model.
-    this.scene.add(new THREE.AmbientLight(0x1a2a4f, 0.08))
-    this.scene.add(new THREE.HemisphereLight(0x2e4c82, 0x04060c, 0.28))
+    this.scene.add(new THREE.AmbientLight(0x1a2a4f, 0.1))
+    this.scene.add(new THREE.HemisphereLight(0x2e4c82, 0x04060c, 0.32))
 
-    // A low warm cross-light on each bank stands in for the lookdev scene's
-    // large facade area lights; it keeps the plaster beige instead of moonlit
-    // lavender without adding dozens of point lights.
-    for (const x of [-180, 180]) {
-      const wash = new THREE.DirectionalLight(0xffb877, 0.24)
-      wash.position.set(x, 34, -10)
-      wash.target.position.set(0, 2, -10)
+    // Each wash stands on the river side of the bank it lights, so the shop
+    // fronts receive it instead of being backlit from behind.
+    for (const [fromX, toX] of [
+      [-70, 20],
+      [70, -20],
+    ] as const) {
+      const wash = new THREE.DirectionalLight(0xffb877, 0.42)
+      wash.position.set(fromX, 36, -10)
+      wash.target.position.set(toX, 2.5, -10)
       this.scene.add(wash)
       this.scene.add(wash.target)
     }
@@ -463,13 +493,18 @@ export class ShangyuanScene {
       light.position.set(x, y, z)
       this.scene.add(light)
     }
-    // Blender's street lamps sit every 38 m at 4.6 m; keep that spacing so the
-    // facades get alternating warm bays instead of one even wash.
+    // Blender's street lamps stand on the promenade at 4.6 m, not inside the
+    // shop volumes; keep that spacing so the facades get alternating warm bays.
     for (const y of [-115, -78, -40, 0, 38, 78, 118, 158]) {
-      warm(21.2, 4.6, -y, 38, 20)
-      warm(-21.2, 4.6, -y, 30, 20)
+      warm(15.2, 4.6, -y, 52, 24)
+      warm(-15.2, 4.6, -y, 46, 24)
     }
     for (const x of [-14, -5, 5, 14]) warm(x, 7, -10, 32, 11)
+    // Gate, performance stage, ferry docks and plaza get their own practicals.
+    warm(16.0, 4.6, 120, 40, 12)
+    warm(-14.2, 3.2, -26, 60, 12)
+    warm(15.0, 3.2, 48, 34, 9)
+    warm(-15.0, 3.2, 90, 34, 9)
     for (const [y, intensity] of [
       [6, 120],
       [12, 96],
@@ -623,6 +658,7 @@ export class ShangyuanScene {
           std.dithering = true
         }
       })
+      this.tuneGlowMaterials(world)
       this.scene.add(world)
       this.prepareTower(world)
       this.addReflection(world)
@@ -656,6 +692,58 @@ export class ShangyuanScene {
     this.pushHud()
     this.cb.onReady()
     this.loop()
+  }
+
+  /**
+   * The Blender build carries emissive strengths tuned for Cycles.  In the web
+   * renderer the string bulbs fall below the bloom threshold and read as flat
+   * discs.  The reference leans on hot lantern cores and pink canopies, so lift
+   * the few named materials that carry that read.
+   */
+  private tuneGlowMaterials(world: THREE.Object3D) {
+    const glowStrength: Record<string, number> = {
+      MAT_SCENE_BulbWarm: 4.2,
+      MAT_SCENE_BulbRed: 4.6,
+      MAT_SCENE_BulbGold: 3.0,
+      MAT_SCENE_QuayLantern: 2.6,
+      MAT_SCENE_BoatPaper: 3.4,
+      // Shoji paper carries the shopfronts; at 1.0 they sit flat under the
+      // night grade, and the reference reads as walls of warm window light.
+      SY_Paper: 1.35,
+      SY_Lantern: 1.8,
+      MAT_Lantern_Paper: 1.6,
+      MAT_Pavilion_Lantern: 1.7,
+      // Foliage cards carry their colour in the atlas, so only the emission is
+      // lifted here; tinting the base map would turn the blossoms into a
+      // single flat pink.
+      MAT_SCENE_BlossomCard: 0.38,
+      MAT_SCENE_WillowCard: 0.3,
+    }
+    // The atlases are painted for neutral daylight.  Under the warm night grade
+    // a pale blossom map turns peach, so pull both the albedo and the glow
+    // towards rose.
+    const cardTint: Record<string, [number, number]> = {
+      MAT_SCENE_BlossomCard: [0xffb4cc, 0xf07fa0],
+      MAT_SCENE_WillowCard: [0xffffff, 0x9fc47a],
+    }
+    world.traverse((o) => {
+      const mesh = o as THREE.Mesh
+      if (!mesh.isMesh) return
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      for (const m of mats) {
+        const std = m as THREE.MeshStandardMaterial
+        if (!std?.name) continue
+        const strength = glowStrength[std.name]
+        if (strength === undefined) continue
+        std.emissiveIntensity = strength
+        const tint = cardTint[std.name]
+        if (tint) {
+          std.color.setHex(tint[0])
+          std.emissive.setHex(tint[1])
+        }
+        std.needsUpdate = true
+      }
+    })
   }
 
   /**
@@ -1204,6 +1292,7 @@ export class ShangyuanScene {
     this.updateLanterns(dt)
     this.updateSkyLanterns(dt)
     this.updateShow(eventDt)
+    this.updateAmbientFireworks(dt)
     this.updateEffects(dt)
     this.updateNearby()
   }
@@ -1504,6 +1593,37 @@ export class ShangyuanScene {
       }
       this.pushHud()
     }
+  }
+
+  /**
+   * Distant festival fireworks between shows.  One shell at a time, high over
+   * the far banks, so the sky keeps moving without stealing the show's beat.
+   */
+  private updateAmbientFireworks(dt: number) {
+    if (this.showClock >= 0) return
+    this.nextFirework -= dt
+    if (this.nextFirework > 0) return
+    this.nextFirework = 8 + Math.random() * 9
+    const palette = [0xffc07a, 0xff9a6a, 0xff8f9e, 0xffd8a8, 0x9fd8ff]
+    const color = palette[Math.floor(Math.random() * palette.length)]
+    // Place the shell ahead of the player so the beat always lands in frame.
+    const dist = 70 + Math.random() * 45
+    const side = (Math.random() - 0.5) * 60
+    const x = this.player.x + Math.cos(this.yaw) * dist - Math.sin(this.yaw) * side
+    const z = this.player.z + Math.sin(this.yaw) * dist + Math.cos(this.yaw) * side
+    const y = 32 + Math.random() * 16
+    this.effects.push(
+      new ParticleBurst(this.scene, this.glow, new THREE.Vector3(x, y, z), {
+        count: 560,
+        color,
+        spread: 1.4,
+        speed: 10.5,
+        size: 2.2,
+        life: 2.8,
+        gravity: 1.6,
+        shell: true,
+      }),
+    )
   }
 
   private updateEffects(dt: number) {

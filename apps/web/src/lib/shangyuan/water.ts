@@ -150,3 +150,30 @@ export function skyLanternTexture() {
   tex.colorSpace = THREE.SRGBColorSpace
   return tex
 }
+
+/** A soft bat silhouette for the dusk flock above the canal. */
+export function batTexture() {
+  const w = 128
+  const h = 64
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d')!
+  ctx.clearRect(0, 0, w, h)
+  ctx.fillStyle = 'rgba(4,6,14,0.95)'
+  ctx.beginPath()
+  ctx.ellipse(w / 2, h / 2, 7, 12, 0, 0, Math.PI * 2)
+  ctx.fill()
+  for (const s of [-1, 1]) {
+    ctx.beginPath()
+    ctx.moveTo(w / 2, h / 2 - 2)
+    ctx.quadraticCurveTo(w / 2 + s * 26, h / 2 - 22, w / 2 + s * 58, h / 2 - 5)
+    ctx.quadraticCurveTo(w / 2 + s * 42, h / 2 + 3, w / 2 + s * 30, h / 2 + 1)
+    ctx.quadraticCurveTo(w / 2 + s * 18, h / 2 + 12, w / 2 + s * 8, h / 2 + 8)
+    ctx.closePath()
+    ctx.fill()
+  }
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}

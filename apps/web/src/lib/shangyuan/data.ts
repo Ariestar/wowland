@@ -32,10 +32,10 @@ export const VIEWPOINTS: {
 }[] = [
   { name: '入市', pos: [16.4, -132, 2.82], look: [0, 30, 8] },
   { name: '灯市', pos: [16.4, -56, 2.82], look: [0, 20, 8] },
-  { name: '桥顶', pos: [0, 10, 9.2], look: [0, 78, 14] },
+  { name: '桥顶', pos: [0, 10, 7.2], look: [0, 78, 14] },
   { name: '埠头', pos: [13.6, 118, 2.82], look: [-16, 108, 4] },
   { name: '对岸', pos: [-16.4, 40, 2.82], look: [16.4, 55, 6] },
-  { name: '远景', pos: [16.4, -152, 7.2], look: [0, 70, 12] },
+  { name: '远景', pos: [16.4, -152, 2.82], look: [0, 70, 12] },
 ]
 
 export type Riddle = { question: string; options: string[]; answer: number; hint: string }

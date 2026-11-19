@@ -97,6 +97,10 @@ export class WalkableGround {
     const bucket = this.cells.get(gy * this.cols + gx)
     if (!bucket) return null
 
+    // A non-finite reference means "any surface": Infinity alone would make the
+    // drop test reject every triangle, because Infinity - maxDrop is Infinity.
+    const ceiling = Number.isFinite(reference) ? reference + maxRise : Number.POSITIVE_INFINITY
+    const floor = Number.isFinite(reference) ? reference - maxDrop : Number.NEGATIVE_INFINITY
     let best = Number.NEGATIVE_INFINITY
     for (const index of bucket) {
       const offset = index * 9
@@ -118,8 +122,8 @@ export class WalkableGround {
       if (w1 < -1e-4 || w2 < -1e-4 || w3 < -1e-4) continue
 
       const height = w1 * az + w2 * bz + w3 * cz
-      if (height > reference + maxRise) continue
-      if (height < reference - maxDrop) continue
+      if (height > ceiling) continue
+      if (height < floor) continue
       if (height > best) best = height
     }
     return best === Number.NEGATIVE_INFINITY ? null : best

@@ -238,6 +238,14 @@
       "roughness": "textures/T_MAT_SCENE_BoatPaper_Roughness.jpg",
       "size": 256,
       "pattern": "paper"
+    },
+    "MAT_SCENE_Bark": {
+      "base_color": "textures/T_MAT_SCENE_Bark_BaseColor.jpg",
+      "normal": "textures/T_MAT_SCENE_Bark_Normal.jpg",
+      "roughness": "textures/T_MAT_SCENE_Bark_Roughness.jpg",
+      "size": 1024,
+      "pattern": "bark",
+      "uv_scale": 5.0
     }
   }
 }

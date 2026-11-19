@@ -283,9 +283,22 @@ export class RiverAtmosphere {
   private readonly petalPhases: Float32Array
   private readonly mistPositions: Float32Array
   private readonly mistPhases: Float32Array
+  private readonly fireflies: THREE.Points
+  private readonly fireflyPositions: Float32Array
+  private readonly fireflyPhases: Float32Array
+  private readonly bats: THREE.Sprite[] = []
+  private readonly batData: {
+    cx: number
+    cy: number
+    cz: number
+    r: number
+    phase: number
+    speed: number
+    flap: number
+  }[] = []
   private time = 0
 
-  constructor(glow: THREE.Texture) {
+  constructor(glow: THREE.Texture, bat?: THREE.Texture) {
     let seed = 0x5f3759df
     const rng = () => {
       seed = (seed + 0x6d2b79f5) | 0
@@ -356,6 +369,70 @@ export class RiverAtmosphere {
     )
     this.mist.frustumCulled = false
     this.object.add(this.mist)
+
+    // Fireflies hug the quay edge, where the warm shop light meets the reeds.
+    const fireflyCount = 420
+    this.fireflyPositions = new Float32Array(fireflyCount * 3)
+    this.fireflyPhases = new Float32Array(fireflyCount)
+    const fireflyColors = new Float32Array(fireflyCount * 3)
+    const fireflyPalette = ['#ffe6a0', '#d8ff9a', '#ffcf70'].map((c) => new THREE.Color(c))
+    for (let i = 0; i < fireflyCount; i++) {
+      const side = rng() < 0.5 ? -1 : 1
+      this.fireflyPositions[i * 3] = side * (12.6 + rng() * 6.6)
+      this.fireflyPositions[i * 3 + 1] = 0.7 + rng() * 4.6
+      this.fireflyPositions[i * 3 + 2] = -140 + rng() * 320
+      this.fireflyPhases[i] = rng() * Math.PI * 2
+      const c = fireflyPalette[Math.floor(rng() * fireflyPalette.length)]
+      fireflyColors[i * 3] = c.r
+      fireflyColors[i * 3 + 1] = c.g
+      fireflyColors[i * 3 + 2] = c.b
+    }
+    const fireflyGeo = new THREE.BufferGeometry()
+    fireflyGeo.setAttribute('position', new THREE.BufferAttribute(this.fireflyPositions, 3))
+    fireflyGeo.setAttribute('color', new THREE.BufferAttribute(fireflyColors, 3))
+    this.fireflies = new THREE.Points(
+      fireflyGeo,
+      new THREE.PointsMaterial({
+        size: 0.24,
+        map: glow,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.95,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        sizeAttenuation: true,
+      }),
+    )
+    this.fireflies.frustumCulled = false
+    this.object.add(this.fireflies)
+
+    // A small dusk flock above the canal. Sprites keep the silhouette soft and
+    // cost one draw call each; the flock stays high enough to clear the eaves.
+    if (bat) {
+      const batCount = 12
+      for (let i = 0; i < batCount; i++) {
+        const material = new THREE.SpriteMaterial({
+          map: bat,
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.88,
+          depthWrite: false,
+        })
+        const sprite = new THREE.Sprite(material)
+        const scale = 0.9 + rng() * 0.7
+        sprite.scale.set(scale * 1.8, scale, 1)
+        const cx = -18 + rng() * 36
+        const cy = 8.5 + rng() * 8.0
+        const cz = -110 + rng() * 260
+        const r = 2.5 + rng() * 5.0
+        const phase = rng() * Math.PI * 2
+        const speed = 0.12 + rng() * 0.18
+        const flap = rng() * Math.PI * 2
+        this.bats.push(sprite)
+        this.batData.push({ cx, cy, cz, r, phase, speed, flap })
+        this.object.add(sprite)
+      }
+    }
   }
 
   update(dt: number) {
@@ -375,8 +452,28 @@ export class RiverAtmosphere {
       this.mistPositions[p + 1] += Math.sin(this.time * 0.35 + this.mistPhases[i]) * 0.0015
       if (this.mistPositions[p + 2] > 180) this.mistPositions[p + 2] = -140
     }
+    for (let i = 0; i < this.fireflyPhases.length; i++) {
+      const p = i * 3
+      this.fireflyPositions[p] += Math.cos(this.time * 1.3 + this.fireflyPhases[i]) * 0.0015
+      this.fireflyPositions[p + 1] += Math.sin(this.time * 1.7 + this.fireflyPhases[i]) * 0.0025
+      this.fireflyPositions[p + 2] += 0.02 * dt
+      if (this.fireflyPositions[p + 2] > 182) this.fireflyPositions[p + 2] = -140
+    }
+    for (let i = 0; i < this.bats.length; i++) {
+      const d = this.batData[i]
+      const sprite = this.bats[i]
+      const a = this.time * d.speed + d.phase
+      sprite.position.set(
+        d.cx + Math.cos(a) * d.r,
+        d.cy + Math.sin(this.time * 0.7 + d.flap) * 0.8,
+        d.cz + Math.sin(a) * d.r * 0.7,
+      )
+      const flap = 0.35 + Math.abs(Math.sin(this.time * 7.0 + d.flap)) * 0.65
+      sprite.scale.y = sprite.scale.x * 0.55 * flap
+    }
     ;(this.petals.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true
     ;(this.mist.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true
+    ;(this.fireflies.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true
   }
 
   dispose(scene: THREE.Scene) {
@@ -385,5 +482,12 @@ export class RiverAtmosphere {
     ;(this.petals.material as THREE.Material).dispose()
     this.mist.geometry.dispose()
     ;(this.mist.material as THREE.Material).dispose()
+    this.fireflies.geometry.dispose()
+    ;(this.fireflies.material as THREE.Material).dispose()
+    const batMap = this.bats[0]?.material.map
+    for (const bat of this.bats) {
+      bat.material.dispose()
+    }
+    batMap?.dispose()
   }
 }
