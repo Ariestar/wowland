@@ -2199,13 +2199,18 @@ export class ShangyuanScene {
     // Owner lanterns slide in from the shore, glow for identification, then
     // fade and recycle after their lifetime (PRD §7.4/§7.5).  Ages use the
     // wall clock so FPS dips cannot stretch the rules.
+    let expired = false
     for (let i = this.lanterns.length - 1; i >= 0; i--) {
       const l = this.lanterns[i]
       if (!l.owner) continue
       if (this.ownerAge(l) > RELEASE.lifetime) {
         this.lanterns.splice(i, 1)
+        expired = true
       }
     }
+    // Publish the new count once the river loses a lantern, otherwise the HUD
+    // keeps showing a stale "河上灯" number (Codex PR #7 finding).
+    if (expired) this.pushHud()
 
     const xs = this.waterMat.uniforms.uLanternX.value as Float32Array
     const zs = this.waterMat.uniforms.uLanternZ.value as Float32Array

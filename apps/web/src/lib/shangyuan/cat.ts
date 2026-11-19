@@ -53,6 +53,8 @@ export class CatPrototype {
 
   private pos = new THREE.Vector3()
   private yaw = 0
+  /** Pounce lunge offset applied on top of `pos` for rendering only. */
+  private readonly visualOffset = new THREE.Vector3()
   private action: CatAction = 'idle'
   private actionT = 0
   private basketTipped = false
@@ -199,6 +201,7 @@ export class CatPrototype {
     this.actionT = 0
     this.basketTipped = false
     this.onShed = false
+    this.visualOffset.set(0, 0, 0)
     const [bx, bz] = toGame(this.zone.basket.x, this.zone.basket.y)
     this.basket.position.set(bx, this.groundZ, bz)
     this.basket.rotation.set(0, 0, 0.16)
@@ -284,16 +287,32 @@ export class CatPrototype {
       case 'idle':
       case 'walk': {
         const { f, r } = this.moveInput
+        // While perched on the shed the cat stays put; only 下棚 leaves it.
+        if (this.onShed) {
+          if (this.action !== 'idle') {
+            this.action = 'idle'
+            this.events.onActionChange(this.action)
+          }
+          break
+        }
         if (f || r) {
-          const len = Math.hypot(f, r) || 1
-          const fx = Math.cos(this.yaw)
-          const fz = Math.sin(this.yaw)
-          const rx = -Math.sin(this.yaw)
-          const rz = Math.cos(this.yaw)
-          const dx = ((f * fx + r * rx) / len) * this.zone.walkSpeed * dt
-          const dz = ((f * fz + r * rz) / len) * this.zone.walkSpeed * dt
-          const nx = THREE.MathUtils.clamp(this.pos.x + dx, this.zone.minX, this.zone.maxX)
-          const nz = THREE.MathUtils.clamp(this.pos.z + dz, -this.zone.maxY, -this.zone.minY)
+          // Tank-style steering: A/D turn, W/S move along the facing.  Using
+          // the facing as the strafe basis and then rotating it toward the
+          // movement vector made held A/D spiral (Codex PR #7 finding).
+          if (r) {
+            this.yaw += r * 2.2 * dt
+          }
+          const step = f * this.zone.walkSpeed * dt
+          const nx = THREE.MathUtils.clamp(
+            this.pos.x + Math.cos(this.yaw) * step,
+            this.zone.minX,
+            this.zone.maxX,
+          )
+          const nz = THREE.MathUtils.clamp(
+            this.pos.z + Math.sin(this.yaw) * step,
+            -this.zone.maxY,
+            -this.zone.minY,
+          )
           if (nx !== this.pos.x || nz !== this.pos.z) {
             this.pos.x = nx
             this.pos.z = nz
@@ -302,12 +321,6 @@ export class CatPrototype {
               this.events.onActionChange(this.action)
             }
           }
-          // Face the movement direction smoothly.
-          const target = Math.atan2(dz, dx)
-          let d = target - this.yaw
-          while (d > Math.PI) d -= Math.PI * 2
-          while (d < -Math.PI) d += Math.PI * 2
-          this.yaw += d * Math.min(1, dt * 10)
         } else if (this.action !== 'idle') {
           this.action = 'idle'
           this.events.onActionChange(this.action)
@@ -319,14 +332,17 @@ export class CatPrototype {
       }
       case 'pounce': {
         // 0.55 s lunge; the basket tips at the midpoint when in range.
+        // The lunge lives in visualOffset so applyTransform cannot erase it.
         const t = Math.min(1, this.actionT / 0.55)
         const lunge = Math.sin(t * Math.PI) * 0.42
-        this.cat.position.z = 0
-        this.cat.position.x = lunge
-        this.cat.position.y = Math.sin(t * Math.PI) * 0.1
+        this.visualOffset.set(
+          Math.cos(this.yaw) * lunge,
+          Math.sin(t * Math.PI) * 0.1,
+          Math.sin(this.yaw) * lunge,
+        )
         if (t >= 0.5 && !this.basketTipped && this.nearBasket()) this.tipBasket()
         if (t >= 1) {
-          this.cat.position.set(0, 0, 0)
+          this.visualOffset.set(0, 0, 0)
           this.action = 'idle'
           this.events.onActionChange(this.action)
         }
@@ -408,7 +424,11 @@ export class CatPrototype {
   }
 
   private applyTransform() {
-    this.cat.position.set(this.pos.x, this.pos.y, this.pos.z)
+    this.cat.position.set(
+      this.pos.x + this.visualOffset.x,
+      this.pos.y + this.visualOffset.y,
+      this.pos.z + this.visualOffset.z,
+    )
     this.cat.rotation.y = -this.yaw + Math.PI / 2
   }
 
