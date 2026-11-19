@@ -14,6 +14,10 @@ export function createWaterMaterial(surfaceAlpha = 0.8) {
     uniforms: {
       uTime: { value: 0 },
       uSurfaceAlpha: { value: surfaceAlpha },
+      /** Half-resolution planar reflection rendered from a mirrored camera. */
+      uReflection: { value: null as THREE.Texture | null },
+      uReflectionStrength: { value: 0 },
+      uReflectionMatrix: { value: new THREE.Matrix4() },
       /** Bank line from layout.json, so the glow follows the canal width. */
       uBankX: { value: 12.5 },
       uDeep: { value: new THREE.Color('#020a18') },
@@ -25,10 +29,22 @@ export function createWaterMaterial(surfaceAlpha = 0.8) {
       uLanternI: { value: new Float32Array(12) },
     },
     vertexShader: /* glsl */ `
+      uniform float uTime;
+      uniform mat4 uReflectionMatrix;
       varying vec3 vWorld;
+      varying vec4 vReflectionUv;
+      float wave(vec2 p, float t) {
+        return sin(p.x * 0.9 + t * 0.55) * 0.42
+             + sin(p.y * 1.6 - t * 0.42) * 0.3
+             + sin((p.x * 0.7 + p.y) * 1.1 + t * 0.33) * 0.28;
+      }
       void main() {
         vec4 wp = modelMatrix * vec4(position, 1.0);
+        // A small vertical swell gives the surface real silhouette against the
+        // lantern light instead of a perfectly flat plane.
+        wp.y += wave(wp.xz, uTime) * 0.035;
         vWorld = wp.xyz;
+        vReflectionUv = uReflectionMatrix * vec4(wp.xyz, 1.0);
         gl_Position = projectionMatrix * viewMatrix * wp;
       }
     `,
@@ -40,10 +56,13 @@ export function createWaterMaterial(surfaceAlpha = 0.8) {
       uniform vec3 uShallow;
       uniform vec3 uHorizon;
       uniform vec3 uMoonDir;
+      uniform sampler2D uReflection;
+      uniform float uReflectionStrength;
       uniform float uLanternX[12];
       uniform float uLanternZ[12];
       uniform float uLanternI[12];
       varying vec3 vWorld;
+      varying vec4 vReflectionUv;
 
       float wave(vec2 p, float t) {
         return sin(p.x * 0.9 + t * 0.55) * 0.42
@@ -91,6 +110,17 @@ export function createWaterMaterial(surfaceAlpha = 0.8) {
         vec3 V = normalize(cameraPosition - vWorld);
         float fresnel = pow(1.0 - max(V.y, 0.0), 4.0);
         col = mix(col, uHorizon, fresnel * 0.34);
+
+        // Planar reflection from the mirrored camera.  Wave offsets break the
+        // mirror into streaks instead of a hard copy of the facades.
+        if (uReflectionStrength > 0.001) {
+          vec2 ruv = vReflectionUv.xy / vReflectionUv.w;
+          ruv += vec2(w, w2) * 0.0006;
+          vec3 refl = texture2D(uReflection, ruv).rgb;
+          // Add the mirror on top of the painted streaks; replacing them made
+          // the far canal read as flat blue.
+          col += refl * vec3(1.08, 0.98, 0.9) * uReflectionStrength * (0.18 + 0.30 * fresnel);
+        }
 
         // Moon glitter: a narrow, broken path rather than a mirror disc.
         vec3 N = normalize(vec3(w * 0.06, 1.0, w2 * 0.06));

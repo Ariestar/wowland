@@ -42,6 +42,19 @@ pnpm verify:mobile
 
 ## Asset workflow
 
+The lantern-river scene has a single-command pipeline: render the foliage
+atlases, build the Blender scene, export a Draco GLB, convert the PNG textures
+to WebP, and copy the result into the web app.
+
+```powershell
+pnpm assets:build     # atlases + scene + export + WebP
+pnpm assets:export    # export the saved scene + WebP
+pnpm assets:atlas     # atlases + export only
+```
+
+The WebP step needs Python 3 with Pillow; pass `--no-webp` to the script to keep
+the original PNGs.
+
 Blender 5.3 headless scripts live under `packages/assets/*/scripts`. The main
 lookdev pipeline is:
 

@@ -5,7 +5,7 @@ rather than solid puffs: the silhouette comes from the card texture, not the
 mesh.  These atlases are rendered from real 3D blossom clusters and willow
 strands, so the cards carry baked form and occlusion instead of flat paint.
 
-Four variants fill a 2 x 2 grid in one 1024 px RGBA image.  Each render writes
+Four variants fill a 2 x 2 grid in one 2048 px RGBA image.  Each render writes
 the full atlas canvas with the camera shifted into one quadrant, which keeps
 the tiles pixel-exact and avoids a colour round-trip through a compositor.
 
@@ -24,7 +24,7 @@ from mathutils import Matrix, Vector
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_DIR = os.path.join(ROOT, "textures")
-TILE = 512
+TILE = 1024
 ATLAS = TILE * 2
 VARIANTS = 4
 SAMPLES = 64
