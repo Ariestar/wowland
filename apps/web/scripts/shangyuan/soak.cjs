@@ -29,6 +29,7 @@ const MINUTES = Number(process.env.SOAK_MINUTES || 3)
   const stats = () => page.evaluate(() => window.__shangyuan.stats())
   const samples = []
   const checks = {}
+  const failures = []
 
   await openScene(page)
   await enter(page, 1200)
@@ -68,32 +69,41 @@ const MINUTES = Number(process.env.SOAK_MINUTES || 3)
     await page.waitForTimeout(350)
     const panel = await page.evaluate(() => !!document.querySelector('[class*="panelWrap"]'))
     if (panel) {
+      const before = (await stats()).releaseCount
       await clickText(page, '放出这盏灯', 250)
       await page.waitForTimeout(1700)
-      releases++
+      const after = await stats()
+      if (after.releaseCount === before + 1) releases++
+      else failures.push(`release@${cycles}`)
     } else {
       await page.waitForTimeout(600)
     }
 
-    // Photo in/out.
+    // Photo in/out, confirmed by the watermark appearing and disappearing.
     await clickText(page, '留影', 250)
-    await page.waitForTimeout(400)
+    await page.waitForTimeout(350)
+    const photoIn = await page.evaluate(() => !!document.querySelector('[class*="watermark"]'))
     await page.mouse.click(720, 450)
     await page.waitForTimeout(300)
-    photos++
+    const photoOut = await page.evaluate(() => !document.querySelector('[class*="watermark"]'))
+    if (photoIn && photoOut) photos++
+    else failures.push(`photo@${cycles}`)
 
-    // Cat trip every other cycle.
+    // Cat trip every other cycle, confirmed by catMode entering and leaving.
     if (cycles % 2 === 0) {
       await teleport(page, 16.2, -99.5)
       await page.keyboard.press('e')
       await page.waitForTimeout(800)
+      const entered = (await stats()).catMode === true
       await page.keyboard.down('w')
       await page.waitForTimeout(700)
       await page.keyboard.up('w')
       await page.keyboard.press('e')
       await page.waitForTimeout(800)
       await clickText(page, '退出狸奴试玩', 500)
-      catTrips++
+      const exited = (await stats()).catMode === false
+      if (entered && exited) catTrips++
+      else failures.push(`cat@${cycles}`)
     }
 
     const s = await stats()
@@ -127,12 +137,14 @@ const MINUTES = Number(process.env.SOAK_MINUTES || 3)
   checks.noGeometryLeak = last.geometries - first.geometries <= 5
   checks.releasesHappened = releases >= 2
   checks.catTripsHappened = catTrips >= 1
+  checks.noActionFailures = failures.length === 0
   checks.inputRecovered = Math.hypot(after.x - before.x, after.y - before.y) > 0.02
   checks.catModeOff = finalStats.catMode === false
   checks.noPageErrors = errors.length === 0
 
   report(OUT, errors, {
     checks,
+    failures,
     minutes: MINUTES,
     cycles,
     releases,
