@@ -1,0 +1,32 @@
+node_modules/
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+next-env.d.ts
+test-results/
+playwright-report/
+.playwright-mcp/
+
+# Local captures and Blender backups
+sy-*.png
+sy-*.yml
+lr-world-*.png
+tex-pass-*.png
+*.blend1
+packages/assets/**/renders/raw/
+packages/assets/**/renders/camera_test/
+
+# Generated level exports and materialization intermediates
+packages/assets/lantern-river/exports/
+packages/assets/lantern-river/web/
+packages/assets/blender/shangyuan-lantern-night-textured.blend
+__pycache__/
+
+.DS_Store
+Thumbs.db
+
+# Scratch reference dumps and review shots
+.reference/
+shots/

@@ -1,0 +1,9 @@
+{
+  "mode": "greybox",
+  "blend": "D:\\Projects\\Sjr-website\\artifacts\\shangyuan\\greybox-source.blend",
+  "resources": 24,
+  "font_path": null,
+  "font_error": "Greybox labels intentionally omitted",
+  "materials": 12,
+  "gi_bake": false
+}

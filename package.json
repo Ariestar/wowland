@@ -1,0 +1,26 @@
+{
+  "name": "wowland",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@12.22.0",
+  "scripts": {
+    "dev": "pnpm --filter @wowland/web dev",
+    "build": "pnpm --filter @wowland/web build",
+    "start": "pnpm --filter @wowland/web start",
+    "typecheck": "pnpm --filter @wowland/web typecheck",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "fix": "biome check --write .",
+    "check": "pnpm typecheck && pnpm lint",
+    "verify": "pnpm check && pnpm build",
+    "verify:visual": "pnpm --filter @wowland/web exec node scripts/shangyuan/capture.cjs",
+    "verify:flow": "pnpm --filter @wowland/web exec node scripts/shangyuan/playtest.cjs",
+    "verify:mobile": "pnpm --filter @wowland/web exec node scripts/shangyuan/mobile.cjs",
+    "assets:atlas": "node scripts/assets/build-world.mjs --atlas --export",
+    "assets:export": "node scripts/assets/build-world.mjs --export",
+    "assets:build": "node scripts/assets/build-world.mjs --atlas"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.8"
+  }
+}

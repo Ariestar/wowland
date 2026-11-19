@@ -1,0 +1,217 @@
+{
+  "kit": "SM_Env_LanternRiver_Kit",
+  "pieces": [
+    {
+      "name": "SM_Env_Bridge_Arch_01",
+      "triangles": 6756,
+      "vertices": 3904,
+      "materials": [
+        "MAT_LR_Stone",
+        "MAT_LR_Stone_Light",
+        "MAT_LR_Lacquer_Red",
+        "MAT_LR_Wood_Dark",
+        "MAT_LR_Paper_Glow",
+        "MAT_LR_Gold"
+      ],
+      "dimensions_m": [
+        47.26,
+        7.625,
+        7.977
+      ],
+      "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\SM_Env_Bridge_Arch_01.glb",
+      "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\SM_Env_Bridge_Arch_01.fbx"
+    },
+    {
+      "name": "SM_Env_LanternTower_01",
+      "triangles": 19412,
+      "vertices": 11673,
+      "materials": [
+        "MAT_LR_Stone",
+        "MAT_LR_Stone_Light",
+        "MAT_LR_Lacquer_Red",
+        "MAT_LR_Paper_Glow",
+        "MAT_LR_Wood_Dark",
+        "MAT_LR_Wood_Warm",
+        "MAT_LR_Roof_Tile",
+        "MAT_LR_Gold"
+      ],
+      "dimensions_m": [
+        13.4,
+        14.1209,
+        21.755
+      ],
+      "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\SM_Env_LanternTower_01.glb",
+      "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\SM_Env_LanternTower_01.fbx"
+    },
+    {
+      "name": "SM_Env_Shophouse_A_01",
+      "triangles": 10096,
+      "vertices": 5804,
+      "materials": [
+        "MAT_LR_Stone",
+        "MAT_LR_Plaster_Warm",
+        "MAT_LR_Wood_Dark",
+        "MAT_LR_Lacquer_Red",
+        "MAT_LR_Wood_Warm",
+        "MAT_LR_Paper_Glow",
+        "MAT_LR_Stone_Light",
+        "MAT_LR_Cloth_Red",
+        "MAT_LR_Cloth_Cream",
+        "MAT_LR_Gold",
+        "MAT_LR_Paper_Red",
+        "MAT_LR_Roof_Tile"
+      ],
+      "dimensions_m": [
+        10.2662,
+        11.3323,
+        9.28
+      ],
+      "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\SM_Env_Shophouse_A_01.glb",
+      "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\SM_Env_Shophouse_A_01.fbx"
+    },
+    {
+      "name": "SM_Env_Shophouse_B_01",
+      "triangles": 12616,
+      "vertices": 7356,
+      "materials": [
+        "MAT_LR_Stone",
+        "MAT_LR_Plaster_Sand",
+        "MAT_LR_Wood_Dark",
+        "MAT_LR_Lacquer_Red",
+        "MAT_LR_Wood_Warm",
+        "MAT_LR_Paper_Glow",
+        "MAT_LR_Stone_Light",
+        "MAT_LR_Cloth_Cream",
+        "MAT_LR_Gold",
+        "MAT_LR_Paper_Red",
+        "MAT_LR_Roof_Tile"
+      ],
+      "dimensions_m": [
+        12.2662,
+        12.3323,
+        12.61
+      ],
+      "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\SM_Env_Shophouse_B_01.glb",
+      "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\SM_Env_Shophouse_B_01.fbx"
+    },
+    {
+      "name": "SM_Env_Shophouse_C_01",
+      "triangles": 10416,
+      "vertices": 5996,
+      "materials": [
+        "MAT_LR_Stone",
+        "MAT_LR_Plaster_Warm",
+        "MAT_LR_Wood_Dark",
+        "MAT_LR_Lacquer_Red",
+        "MAT_LR_Wood_Warm",
+        "MAT_LR_Paper_Glow",
+        "MAT_LR_Stone_Light",
+        "MAT_LR_Cloth_Red",
+        "MAT_LR_Cloth_Cream",
+        "MAT_LR_Gold",
+        "MAT_LR_Paper_Red",
+        "MAT_LR_Roof_Blue"
+      ],
+      "dimensions_m": [
+        9.2662,
+        10.8323,
+        9.28
+      ],
+      "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\SM_Env_Shophouse_C_01.glb",
+      "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\SM_Env_Shophouse_C_01.fbx"
+    },
+    {
+      "name": "SM_Prop_Boat_Pleasure_01",
+      "triangles": 6680,
+      "vertices": 3676,
+      "materials": [
+        "MAT_LR_Wood_Warm",
+        "MAT_LR_Lacquer_Red",
+        "MAT_LR_Wood_Dark",
+        "MAT_LR_Paper_Glow",
+        "MAT_LR_Paper_Red",
+        "MAT_LR_Gold",
+        "MAT_LR_Roof_Tile"
+      ],
+      "dimensions_m": [
+        7.257,
+        11.28,
+        3.31
+      ],
+      "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\SM_Prop_Boat_Pleasure_01.glb",
+      "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\SM_Prop_Boat_Pleasure_01.fbx"
+    },
+    {
+      "name": "SM_Prop_LanternString_01",
+      "triangles": 1624,
+      "vertices": 862,
+      "materials": [
+        "MAT_LR_Wood_Dark",
+        "MAT_LR_Paper_Glow",
+        "MAT_LR_Stone"
+      ],
+      "dimensions_m": [
+        28.4,
+        0.4,
+        9.34
+      ],
+      "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\SM_Prop_LanternString_01.glb",
+      "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\SM_Prop_LanternString_01.fbx"
+    },
+    {
+      "name": "SM_Prop_Lantern_Hung_01",
+      "triangles": 292,
+      "vertices": 158,
+      "materials": [
+        "MAT_LR_Paper_Glow",
+        "MAT_LR_Gold",
+        "MAT_LR_Lacquer_Red"
+      ],
+      "dimensions_m": [
+        0.54,
+        0.5136,
+        1.17
+      ],
+      "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\SM_Prop_Lantern_Hung_01.glb",
+      "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\SM_Prop_Lantern_Hung_01.fbx"
+    },
+    {
+      "name": "SM_Prop_Lantern_Sky_01",
+      "triangles": 220,
+      "vertices": 114,
+      "materials": [
+        "MAT_LR_Paper_Glow",
+        "MAT_LR_Wood_Dark"
+      ],
+      "dimensions_m": [
+        1.0,
+        0.9511,
+        1.0025
+      ],
+      "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\SM_Prop_Lantern_Sky_01.glb",
+      "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\SM_Prop_Lantern_Sky_01.fbx"
+    },
+    {
+      "name": "SM_Prop_Stall_01",
+      "triangles": 348,
+      "vertices": 208,
+      "materials": [
+        "MAT_LR_Wood_Dark",
+        "MAT_LR_Wood_Warm",
+        "MAT_LR_Cloth_Red",
+        "MAT_LR_Cloth_Cream",
+        "MAT_LR_Paper_Red",
+        "MAT_LR_Lacquer_Red"
+      ],
+      "dimensions_m": [
+        4.2,
+        2.9926,
+        2.997
+      ],
+      "glb": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\SM_Prop_Stall_01.glb",
+      "fbx": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\kit\\SM_Prop_Stall_01.fbx"
+    }
+  ],
+  "exports": {},
+  "kit_blend": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\SM_Env_LanternRiver_Kit.blend"
+}

@@ -1,0 +1,251 @@
+{
+  "tile_meters": 2.4,
+  "materials": {
+    "MAT_SCENE_Paving": {
+      "base_color": "textures/T_MAT_SCENE_Paving_BaseColor.jpg",
+      "normal": "textures/T_MAT_SCENE_Paving_Normal.jpg",
+      "roughness": "textures/T_MAT_SCENE_Paving_Roughness.jpg",
+      "size": 512,
+      "pattern": "paving"
+    },
+    "MAT_SCENE_QuayStone": {
+      "base_color": "textures/T_MAT_SCENE_QuayStone_BaseColor.jpg",
+      "normal": "textures/T_MAT_SCENE_QuayStone_Normal.jpg",
+      "roughness": "textures/T_MAT_SCENE_QuayStone_Roughness.jpg",
+      "size": 512,
+      "pattern": "stone"
+    },
+    "MAT_LR_Stone": {
+      "base_color": "textures/T_MAT_LR_Stone_BaseColor.jpg",
+      "normal": "textures/T_MAT_LR_Stone_Normal.jpg",
+      "roughness": "textures/T_MAT_LR_Stone_Roughness.jpg",
+      "size": 512,
+      "pattern": "stone"
+    },
+    "MAT_LR_Stone_Light": {
+      "base_color": "textures/T_MAT_LR_Stone_Light_BaseColor.jpg",
+      "normal": "textures/T_MAT_LR_Stone_Light_Normal.jpg",
+      "roughness": "textures/T_MAT_LR_Stone_Light_Roughness.jpg",
+      "size": 512,
+      "pattern": "stone"
+    },
+    "MAT_LR_Plaster_Warm": {
+      "base_color": "textures/T_MAT_LR_Plaster_Warm_BaseColor.jpg",
+      "normal": "textures/T_MAT_LR_Plaster_Warm_Normal.jpg",
+      "roughness": "textures/T_MAT_LR_Plaster_Warm_Roughness.jpg",
+      "size": 512,
+      "pattern": "plaster"
+    },
+    "MAT_LR_Plaster_Sand": {
+      "base_color": "textures/T_MAT_LR_Plaster_Sand_BaseColor.jpg",
+      "normal": "textures/T_MAT_LR_Plaster_Sand_Normal.jpg",
+      "roughness": "textures/T_MAT_LR_Plaster_Sand_Roughness.jpg",
+      "size": 512,
+      "pattern": "plaster"
+    },
+    "MAT_LR_Wood_Dark": {
+      "base_color": "textures/T_MAT_LR_Wood_Dark_BaseColor.jpg",
+      "normal": "textures/T_MAT_LR_Wood_Dark_Normal.jpg",
+      "roughness": "textures/T_MAT_LR_Wood_Dark_Roughness.jpg",
+      "size": 512,
+      "pattern": "wood_dark"
+    },
+    "MAT_LR_Wood_Warm": {
+      "base_color": "textures/T_MAT_LR_Wood_Warm_BaseColor.jpg",
+      "normal": "textures/T_MAT_LR_Wood_Warm_Normal.jpg",
+      "roughness": "textures/T_MAT_LR_Wood_Warm_Roughness.jpg",
+      "size": 512,
+      "pattern": "wood"
+    },
+    "MAT_LR_Roof_Tile": {
+      "base_color": "textures/T_MAT_LR_Roof_Tile_BaseColor.jpg",
+      "normal": "textures/T_MAT_LR_Roof_Tile_Normal.jpg",
+      "roughness": "textures/T_MAT_LR_Roof_Tile_Roughness.jpg",
+      "size": 512,
+      "pattern": "roof"
+    },
+    "MAT_LR_Roof_Blue": {
+      "base_color": "textures/T_MAT_LR_Roof_Blue_BaseColor.jpg",
+      "normal": "textures/T_MAT_LR_Roof_Blue_Normal.jpg",
+      "roughness": "textures/T_MAT_LR_Roof_Blue_Roughness.jpg",
+      "size": 512,
+      "pattern": "roof"
+    },
+    "MAT_LR_Lacquer_Red": {
+      "base_color": "textures/T_MAT_LR_Lacquer_Red_BaseColor.jpg",
+      "normal": "textures/T_MAT_LR_Lacquer_Red_Normal.jpg",
+      "roughness": "textures/T_MAT_LR_Lacquer_Red_Roughness.jpg",
+      "size": 512,
+      "pattern": "lacquer"
+    },
+    "MAT_LR_Gold": {
+      "base_color": "textures/T_MAT_LR_Gold_BaseColor.jpg",
+      "normal": "textures/T_MAT_LR_Gold_Normal.jpg",
+      "roughness": "textures/T_MAT_LR_Gold_Roughness.jpg",
+      "size": 256,
+      "pattern": "metal"
+    },
+    "MAT_LR_Paper_Glow": {
+      "base_color": "textures/T_MAT_LR_Paper_Glow_BaseColor.jpg",
+      "normal": "textures/T_MAT_LR_Paper_Glow_Normal.jpg",
+      "roughness": "textures/T_MAT_LR_Paper_Glow_Roughness.jpg",
+      "size": 256,
+      "pattern": "paper"
+    },
+    "MAT_LR_Paper_Red": {
+      "base_color": "textures/T_MAT_LR_Paper_Red_BaseColor.jpg",
+      "normal": "textures/T_MAT_LR_Paper_Red_Normal.jpg",
+      "roughness": "textures/T_MAT_LR_Paper_Red_Roughness.jpg",
+      "size": 256,
+      "pattern": "paper"
+    },
+    "MAT_LR_Cloth_Red": {
+      "base_color": "textures/T_MAT_LR_Cloth_Red_BaseColor.jpg",
+      "normal": "textures/T_MAT_LR_Cloth_Red_Normal.jpg",
+      "roughness": "textures/T_MAT_LR_Cloth_Red_Roughness.jpg",
+      "size": 256,
+      "pattern": "cloth"
+    },
+    "MAT_LR_Cloth_Cream": {
+      "base_color": "textures/T_MAT_LR_Cloth_Cream_BaseColor.jpg",
+      "normal": "textures/T_MAT_LR_Cloth_Cream_Normal.jpg",
+      "roughness": "textures/T_MAT_LR_Cloth_Cream_Roughness.jpg",
+      "size": 256,
+      "pattern": "cloth"
+    },
+    "MAT_Pavilion_Wood": {
+      "base_color": "textures/T_MAT_Pavilion_Wood_BaseColor.jpg",
+      "normal": "textures/T_MAT_Pavilion_Wood_Normal.jpg",
+      "roughness": "textures/T_MAT_Pavilion_Wood_Roughness.jpg",
+      "size": 256,
+      "pattern": "lacquer"
+    },
+    "MAT_Pavilion_Stone": {
+      "base_color": "textures/T_MAT_Pavilion_Stone_BaseColor.jpg",
+      "normal": "textures/T_MAT_Pavilion_Stone_Normal.jpg",
+      "roughness": "textures/T_MAT_Pavilion_Stone_Roughness.jpg",
+      "size": 256,
+      "pattern": "stone"
+    },
+    "MAT_Pavilion_Gold": {
+      "base_color": "textures/T_MAT_Pavilion_Gold_BaseColor.jpg",
+      "normal": "textures/T_MAT_Pavilion_Gold_Normal.jpg",
+      "roughness": "textures/T_MAT_Pavilion_Gold_Roughness.jpg",
+      "size": 256,
+      "pattern": "metal"
+    },
+    "MAT_Pavilion_Paint": {
+      "base_color": "textures/T_MAT_Pavilion_Paint_BaseColor.jpg",
+      "normal": "textures/T_MAT_Pavilion_Paint_Normal.jpg",
+      "roughness": "textures/T_MAT_Pavilion_Paint_Roughness.jpg",
+      "size": 256,
+      "pattern": "lacquer"
+    },
+    "MAT_Pavilion_Roof": {
+      "base_color": "textures/T_MAT_Pavilion_Roof_BaseColor.jpg",
+      "normal": "textures/T_MAT_Pavilion_Roof_Normal.jpg",
+      "roughness": "textures/T_MAT_Pavilion_Roof_Roughness.jpg",
+      "size": 256,
+      "pattern": "roof"
+    },
+    "MAT_Pavilion_Lantern": {
+      "base_color": "textures/T_MAT_Pavilion_Lantern_BaseColor.jpg",
+      "normal": "textures/T_MAT_Pavilion_Lantern_Normal.jpg",
+      "roughness": "textures/T_MAT_Pavilion_Lantern_Roughness.jpg",
+      "size": 128,
+      "pattern": "paper"
+    },
+    "MAT_Lantern_Wood": {
+      "base_color": "textures/T_MAT_Lantern_Wood_BaseColor.jpg",
+      "normal": "textures/T_MAT_Lantern_Wood_Normal.jpg",
+      "roughness": "textures/T_MAT_Lantern_Wood_Roughness.jpg",
+      "size": 128,
+      "pattern": "wood_dark"
+    },
+    "MAT_Lantern_Gold": {
+      "base_color": "textures/T_MAT_Lantern_Gold_BaseColor.jpg",
+      "normal": "textures/T_MAT_Lantern_Gold_Normal.jpg",
+      "roughness": "textures/T_MAT_Lantern_Gold_Roughness.jpg",
+      "size": 128,
+      "pattern": "metal"
+    },
+    "MAT_Lantern_Paper": {
+      "base_color": "textures/T_MAT_Lantern_Paper_BaseColor.jpg",
+      "normal": "textures/T_MAT_Lantern_Paper_Normal.jpg",
+      "roughness": "textures/T_MAT_Lantern_Paper_Roughness.jpg",
+      "size": 128,
+      "pattern": "paper"
+    },
+    "MAT_Lantern_Tassel": {
+      "base_color": "textures/T_MAT_Lantern_Tassel_BaseColor.jpg",
+      "normal": "textures/T_MAT_Lantern_Tassel_Normal.jpg",
+      "roughness": "textures/T_MAT_Lantern_Tassel_Roughness.jpg",
+      "size": 128,
+      "pattern": "cloth"
+    },
+    "MAT_SCENE_QuayLantern": {
+      "base_color": "textures/T_MAT_SCENE_QuayLantern_BaseColor.jpg",
+      "normal": "textures/T_MAT_SCENE_QuayLantern_Normal.jpg",
+      "roughness": "textures/T_MAT_SCENE_QuayLantern_Roughness.jpg",
+      "size": 128,
+      "pattern": "paper"
+    },
+    "MAT_SCENE_Trunk": {
+      "base_color": "textures/T_MAT_SCENE_Trunk_BaseColor.jpg",
+      "normal": "textures/T_MAT_SCENE_Trunk_Normal.jpg",
+      "roughness": "textures/T_MAT_SCENE_Trunk_Roughness.jpg",
+      "size": 256,
+      "pattern": "bark"
+    },
+    "MAT_SCENE_Blossom": {
+      "base_color": "textures/T_MAT_SCENE_Blossom_BaseColor.jpg",
+      "normal": "textures/T_MAT_SCENE_Blossom_Normal.jpg",
+      "roughness": "textures/T_MAT_SCENE_Blossom_Roughness.jpg",
+      "size": 256,
+      "pattern": "blossom"
+    },
+    "MAT_Lantern_Wood.001": {
+      "base_color": "textures/T_MAT_Lantern_Wood_BaseColor.jpg",
+      "normal": "textures/T_MAT_Lantern_Wood_Normal.jpg",
+      "roughness": "textures/T_MAT_Lantern_Wood_Roughness.jpg",
+      "size": 128,
+      "pattern": "wood_dark"
+    },
+    "MAT_Lantern_Gold.001": {
+      "base_color": "textures/T_MAT_Lantern_Gold_BaseColor.jpg",
+      "normal": "textures/T_MAT_Lantern_Gold_Normal.jpg",
+      "roughness": "textures/T_MAT_Lantern_Gold_Roughness.jpg",
+      "size": 128,
+      "pattern": "metal"
+    },
+    "MAT_Lantern_Paper.001": {
+      "base_color": "textures/T_MAT_Lantern_Paper_BaseColor.jpg",
+      "normal": "textures/T_MAT_Lantern_Paper_Normal.jpg",
+      "roughness": "textures/T_MAT_Lantern_Paper_Roughness.jpg",
+      "size": 128,
+      "pattern": "paper"
+    },
+    "MAT_Lantern_Tassel.001": {
+      "base_color": "textures/T_MAT_Lantern_Tassel_BaseColor.jpg",
+      "normal": "textures/T_MAT_Lantern_Tassel_Normal.jpg",
+      "roughness": "textures/T_MAT_Lantern_Tassel_Roughness.jpg",
+      "size": 128,
+      "pattern": "cloth"
+    },
+    "MAT_SCENE_BoatPaper": {
+      "base_color": "textures/T_MAT_SCENE_BoatPaper_BaseColor.jpg",
+      "normal": "textures/T_MAT_SCENE_BoatPaper_Normal.jpg",
+      "roughness": "textures/T_MAT_SCENE_BoatPaper_Roughness.jpg",
+      "size": 256,
+      "pattern": "paper"
+    },
+    "MAT_SCENE_Bark": {
+      "base_color": "textures/T_MAT_SCENE_Bark_BaseColor.jpg",
+      "normal": "textures/T_MAT_SCENE_Bark_Normal.jpg",
+      "roughness": "textures/T_MAT_SCENE_Bark_Roughness.jpg",
+      "size": 1024,
+      "pattern": "bark",
+      "uv_scale": 5.0
+    }
+  }
+}

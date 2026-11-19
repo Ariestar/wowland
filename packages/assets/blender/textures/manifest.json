@@ -1,0 +1,55 @@
+{
+  "size": 256,
+  "materials": {
+    "Stone": {
+      "base_color": "textures/T_SY_Stone_BaseColor.jpg",
+      "normal": "textures/T_SY_Stone_Normal.jpg",
+      "pattern": "stone"
+    },
+    "Plaster": {
+      "base_color": "textures/T_SY_Plaster_BaseColor.jpg",
+      "normal": "textures/T_SY_Plaster_Normal.jpg",
+      "pattern": "plaster"
+    },
+    "Wood": {
+      "base_color": "textures/T_SY_Wood_BaseColor.jpg",
+      "normal": "textures/T_SY_Wood_Normal.jpg",
+      "pattern": "wood"
+    },
+    "DarkWood": {
+      "base_color": "textures/T_SY_DarkWood_BaseColor.jpg",
+      "normal": "textures/T_SY_DarkWood_Normal.jpg",
+      "pattern": "darkwood"
+    },
+    "Roof": {
+      "base_color": "textures/T_SY_Roof_BaseColor.jpg",
+      "normal": "textures/T_SY_Roof_Normal.jpg",
+      "pattern": "roof"
+    },
+    "Vermilion": {
+      "base_color": "textures/T_SY_Vermilion_BaseColor.jpg",
+      "normal": "textures/T_SY_Vermilion_Normal.jpg",
+      "pattern": "paint"
+    },
+    "Gold": {
+      "base_color": "textures/T_SY_Gold_BaseColor.jpg",
+      "normal": "textures/T_SY_Gold_Normal.jpg",
+      "pattern": "metal"
+    },
+    "Paper": {
+      "base_color": "textures/T_SY_Paper_BaseColor.jpg",
+      "normal": "textures/T_SY_Paper_Normal.jpg",
+      "pattern": "paper"
+    },
+    "Lantern": {
+      "base_color": "textures/T_SY_Lantern_BaseColor.jpg",
+      "normal": "textures/T_SY_Lantern_Normal.jpg",
+      "pattern": "lantern"
+    },
+    "Foliage": {
+      "base_color": "textures/T_SY_Foliage_BaseColor.jpg",
+      "normal": "textures/T_SY_Foliage_Normal.jpg",
+      "pattern": "foliage"
+    }
+  }
+}

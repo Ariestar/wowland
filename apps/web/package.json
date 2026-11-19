@@ -1,0 +1,26 @@
+{
+  "name": "@wowland/web",
+  "private": true,
+  "version": "0.1.0",
+  "description": "上元灯夜：一个可以走进去的宋代水城上元灯会（网页预览）",
+  "scripts": {
+    "dev": "next dev --hostname 127.0.0.1 --port 3000",
+    "build": "next build",
+    "start": "next start --hostname 127.0.0.1 --port 3000",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "^16.3.6",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "three": "^0.183.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.5",
+    "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.183.1",
+    "typescript": "~5.9.3"
+  }
+}
