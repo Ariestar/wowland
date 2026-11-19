@@ -119,6 +119,51 @@ export class ShangyuanAudio {
     src.start(t0)
   }
 
+  /** A rising shell: a thin sine sweep under a breath of noise. */
+  whistle(duration = 1.1) {
+    this.unlock()
+    const ctx = this.ctx
+    if (!ctx || !this.master) return
+    const t0 = ctx.currentTime
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(520, t0)
+    osc.frequency.exponentialRampToValueAtTime(1680, t0 + duration)
+    gain.gain.setValueAtTime(0.0001, t0)
+    gain.gain.exponentialRampToValueAtTime(0.03, t0 + duration * 0.6)
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration)
+    osc.connect(gain).connect(this.master)
+    osc.start(t0)
+    osc.stop(t0 + duration + 0.05)
+  }
+
+  /** Sparse high clicks: the crackling tail after a shell breaks. */
+  crackle(level = 0.6, duration = 1.4) {
+    this.unlock()
+    const ctx = this.ctx
+    if (!ctx || !this.master) return
+    const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * duration), ctx.sampleRate)
+    const data = buffer.getChannelData(0)
+    const clicks = 34
+    for (let c = 0; c < clicks; c++) {
+      const at = Math.floor(Math.random() * (data.length - 320))
+      const amp = (0.35 + Math.random() * 0.65) * (1 - at / data.length) ** 1.6
+      for (let i = 0; i < 260; i++) {
+        data[at + i] += (Math.random() * 2 - 1) * amp * (1 - i / 260) ** 2
+      }
+    }
+    const src = ctx.createBufferSource()
+    src.buffer = buffer
+    const filter = ctx.createBiquadFilter()
+    filter.type = 'highpass'
+    filter.frequency.value = 1800
+    const gain = ctx.createGain()
+    gain.gain.value = 0.22 * level
+    src.connect(filter).connect(gain).connect(this.master)
+    src.start(ctx.currentTime + 0.04)
+  }
+
   setMuted(muted: boolean) {
     this.muted = muted
     if (this.master) this.master.gain.value = muted ? 0 : 0.55
