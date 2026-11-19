@@ -132,24 +132,41 @@ export default function ShangyuanWorld({ language }: Props) {
   /** Build the scene and return its cleanup, so a failed load can retry. */
   const initScene = useCallback(
     (canvas: HTMLCanvasElement) => {
+      // StrictMode mounts twice in development; a disposed instance must not
+      // publish callbacks or load errors into the live UI (Codex PR #10).
+      let active = true
       const scene = new ShangyuanScene(canvas, {
-        onProgress: (loaded, total) => setProgress(loaded / total),
-        onReady: () => setReady(true),
-        onPrompt: setPrompt,
-        onHud: setHud,
-        onPanel: setPanel,
-        onToast: flash,
+        onProgress: (loaded, total) => {
+          if (active) setProgress(loaded / total)
+        },
+        onReady: () => {
+          if (active) setReady(true)
+        },
+        onPrompt: (next) => {
+          if (active) setPrompt(next)
+        },
+        onHud: (next) => {
+          if (active) setHud(next)
+        },
+        onPanel: (next) => {
+          if (active) setPanel(next)
+        },
+        onToast: (text) => {
+          if (active) flash(text)
+        },
       })
       sceneRef.current = scene
       // Preview-only hook used by scripts/shangyuan/capture.cjs; harmless in production.
       ;(window as unknown as { __shangyuan?: unknown }).__shangyuan = scene
       setLoadError(false)
       void scene.load().catch(() => {
+        if (!active) return
         // PRD F01/§12.1: a failed load must offer a retry instead of a dead gate.
         setLoadError(true)
         flash('场景加载失败，请重试')
       })
       return () => {
+        active = false
         scene.dispose()
         if (sceneRef.current === scene) sceneRef.current = null
         if (toastTimer.current) window.clearTimeout(toastTimer.current)
