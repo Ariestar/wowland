@@ -708,7 +708,20 @@ export class ShangyuanScene {
     window.addEventListener('keydown', this.onKeyDown)
     window.addEventListener('keyup', this.onKeyUp)
     window.addEventListener('resize', this.resize)
+    window.addEventListener('blur', this.haltInput)
+    document.addEventListener('visibilitychange', this.onVisibilityChange)
     document.addEventListener('pointerlockchange', this.onLockChange)
+  }
+
+  /** Focus loss stops movement immediately (PRD §12.2). */
+  private haltInput = () => {
+    this.keys.clear()
+    this.setTouch(0, 0)
+    this.dragging = false
+  }
+
+  private onVisibilityChange = () => {
+    if (document.hidden) this.haltInput()
   }
 
   private onLockChange = () => {
@@ -1566,6 +1579,8 @@ export class ShangyuanScene {
       this.audio.chime(660)
       this.cb.onToast(COPY.C03)
       this.closePanel()
+      // Turn briefly to the fresh lantern so the light-up is the focal moment.
+      this.panTo(new THREE.Vector3(15.6, SCENE.groundZ + 1.05, 122.4), 1.2, -0.05, true)
       this.pushHud()
       return
     }
@@ -1682,6 +1697,7 @@ export class ShangyuanScene {
     this.catEnterT = 0
     this.cat.group.visible = true
     this.cat.reset()
+    this.audio.meow()
     this.viewTween = null
     this.pan = null
     this.cb.onToast(COPY.C17)
@@ -1724,6 +1740,7 @@ export class ShangyuanScene {
 
   private onCatActionChange(action: string) {
     this.catActionLabel = action
+    if (action === 'pounce') this.audio.rustle(0.3)
     this.pushHud()
   }
 
@@ -1731,12 +1748,14 @@ export class ShangyuanScene {
     this.cat = new CatPrototype(CAT_ZONE, SCENE.groundZ, {
       onBasketTipped: () => {
         this.audio.thud()
+        this.audio.rustle(0.6)
         this.cb.onToast(COPY.C19)
         this.pushHud()
       },
       onShedLanded: () => {
         this.catCompleted = true
         this.audio.chime(980)
+        this.audio.meow()
         this.cb.onToast(COPY.C22)
         this.pushHud()
       },
@@ -2590,6 +2609,8 @@ export class ShangyuanScene {
     window.removeEventListener('keyup', this.onKeyUp)
     window.removeEventListener('resize', this.resize)
     document.removeEventListener('pointerlockchange', this.onLockChange)
+    window.removeEventListener('blur', this.haltInput)
+    document.removeEventListener('visibilitychange', this.onVisibilityChange)
     this.effects.forEach((e) => {
       e.dispose(this.scene)
     })

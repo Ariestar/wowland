@@ -138,6 +138,53 @@ export class ShangyuanAudio {
     osc.stop(t0 + duration + 0.05)
   }
 
+  /** A short, friendly cat call: two syllables with a falling tail. */
+  meow() {
+    this.unlock()
+    const ctx = this.ctx
+    if (!ctx || !this.master) return
+    const t0 = ctx.currentTime
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'sawtooth'
+    osc.frequency.setValueAtTime(620, t0)
+    osc.frequency.linearRampToValueAtTime(940, t0 + 0.16)
+    osc.frequency.linearRampToValueAtTime(520, t0 + 0.42)
+    gain.gain.setValueAtTime(0.0001, t0)
+    gain.gain.exponentialRampToValueAtTime(0.09, t0 + 0.05)
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.46)
+    const filter = ctx.createBiquadFilter()
+    filter.type = 'lowpass'
+    filter.frequency.value = 1800
+    osc.connect(filter).connect(gain).connect(this.master)
+    osc.start(t0)
+    osc.stop(t0 + 0.5)
+  }
+
+  /** Bamboo knocking and tangerines scattering: one soft noise burst. */
+  rustle(level = 0.5) {
+    this.unlock()
+    const ctx = this.ctx
+    if (!ctx || !this.master) return
+    const t0 = ctx.currentTime
+    const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.5), ctx.sampleRate)
+    const data = buffer.getChannelData(0)
+    for (let i = 0; i < data.length; i++) {
+      const t = i / data.length
+      data[i] = (Math.random() * 2 - 1) * (1 - t) ** 2 * (0.5 + 0.5 * Math.sin(i * 0.02))
+    }
+    const src = ctx.createBufferSource()
+    src.buffer = buffer
+    const filter = ctx.createBiquadFilter()
+    filter.type = 'bandpass'
+    filter.frequency.value = 1400
+    const gain = ctx.createGain()
+    gain.gain.value = 0.22 * level
+    src.connect(filter).connect(gain).connect(this.master)
+    src.start(t0)
+    this.tone(190, 0.18, 'triangle', 0.05)
+  }
+
   /** Sparse high clicks: the crackling tail after a shell breaks. */
   crackle(level = 0.6, duration = 1.4) {
     this.unlock()

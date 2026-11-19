@@ -16,6 +16,8 @@
     "verify:visual": "pnpm --filter @wowland/web exec node scripts/shangyuan/capture.cjs",
     "verify:flow": "pnpm --filter @wowland/web exec node scripts/shangyuan/playtest.cjs",
     "verify:mobile": "pnpm --filter @wowland/web exec node scripts/shangyuan/mobile.cjs",
+    "verify:combos": "pnpm --filter @wowland/web exec node scripts/shangyuan/combos.cjs",
+    "verify:limits": "pnpm --filter @wowland/web exec node scripts/shangyuan/limits.cjs",
     "assets:atlas": "node scripts/assets/build-world.mjs --atlas --export",
     "assets:export": "node scripts/assets/build-world.mjs --export",
     "assets:build": "node scripts/assets/build-world.mjs --atlas"
