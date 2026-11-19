@@ -106,7 +106,9 @@ async function measureFps(page, ms = 1500) {
 }
 
 function report(out, errors, extra = {}) {
-  console.log(JSON.stringify({ ...extra, errors: errors.slice(0, 8), out }, null, 2))
+  const payload = { ...extra, errors: errors.slice(0, 8), out }
+  fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(payload, null, 2))
+  console.log(JSON.stringify(payload, null, 2))
 }
 
 module.exports = {
