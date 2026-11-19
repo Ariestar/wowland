@@ -19,7 +19,8 @@ import {
   SCENE,
   VIEWPOINTS,
 } from './data'
-import { type Effect, IronFlower, ParticleBurst, Ripple, RiverAtmosphere } from './effects'
+import { type Effect, Ripple, RiverAtmosphere } from './effects'
+import { FireworkShell, FireworkSystem, IronFlower, type ShellKind } from './fireworks'
 import { WaterlineFlora } from './flora'
 import { gradingShader, sanitizeShader } from './postFx'
 import type { Panel, Phase, SceneCallbacks } from './types'
@@ -82,6 +83,7 @@ export class ShangyuanScene {
   private environmentMap: THREE.Texture | null = null
   private readonly glow: THREE.Texture
   private readonly skyGlow: THREE.Texture
+  private readonly fireworks: FireworkSystem
   private skyLanterns: {
     points: THREE.Points
     positions: Float32Array
@@ -173,6 +175,8 @@ export class ShangyuanScene {
 
     this.glow = glowTexture()
     this.skyGlow = skyLanternTexture()
+    this.fireworks = new FireworkSystem(this.glow)
+    this.scene.add(this.fireworks.object)
     this.waterMat = createWaterMaterial(reflectionBudget() ? 0.8 : 0.96)
     this.water = new THREE.Mesh(new THREE.PlaneGeometry(36, 380, 48, 320), this.waterMat)
     this.water.rotation.x = -Math.PI / 2
@@ -209,6 +213,25 @@ export class ShangyuanScene {
         screenSpaceRadius: false,
       })
       gtao.updatePdMaterial({ radius: 5, rings: 2, samples: 12 })
+      // GTAOPass hides points and lines from its normal prepass but not
+      // sprites.  A sprite quad writes depth for its whole rectangle, which
+      // shows up as a black slab behind the tower and as square bats in the
+      // sky, so extend the same hide/restore list to sprites.
+      const internals = gtao as unknown as {
+        _overrideVisibility: () => void
+        _visibilityCache: THREE.Object3D[]
+      }
+      const overrideVisibility = internals._overrideVisibility.bind(gtao)
+      internals._overrideVisibility = () => {
+        overrideVisibility()
+        this.scene.traverse((o) => {
+          const sprite = o as THREE.Sprite
+          if ((sprite.isSprite || o.userData.noGtao) && o.visible) {
+            o.visible = false
+            internals._visibilityCache.push(o)
+          }
+        })
+      }
       // The AO buffer is upscaled anyway, so rendering its depth/normal
       // prepass at half size removes a full-resolution scene pass.
       const setGtaoSize = gtao.setSize.bind(gtao)
@@ -1010,13 +1033,13 @@ export class ShangyuanScene {
           map: this.glow,
           color: 0xffc98a,
           transparent: true,
-          opacity: 0.14,
+          opacity: 0.12,
           depthWrite: false,
           blending: THREE.AdditiveBlending,
         }),
       )
       sprite.position.set(0, y, -78)
-      sprite.scale.setScalar(8)
+      sprite.scale.setScalar(6.2)
       this.towerGlow.push(sprite)
       this.scene.add(sprite)
     }
@@ -1438,6 +1461,7 @@ export class ShangyuanScene {
 
     this.updateLanterns(dt)
     this.updateSkyLanterns(dt)
+    this.fireworks.update(dt)
     this.updateShow(eventDt)
     this.updateAmbientFireworks(dt)
     this.updateEffects(dt)
@@ -1629,93 +1653,112 @@ export class ShangyuanScene {
     if (t > 1.2 && this.showStage === 1) {
       this.showStage = 2
       this.audio.boom(0.85)
-      this.effects.push(new IronFlower(this.scene, this.glow, new THREE.Vector3(15, 3.6, -88)))
+      this.effects.push(new IronFlower(this.scene, this.fireworks, new THREE.Vector3(15, 3.6, -88)))
       this.pushHud()
     }
     if (t > 2.6 && this.showStage === 2) {
       this.showStage = 3
       this.effects.push(
-        new ParticleBurst(this.scene, this.glow, new THREE.Vector3(12, 22, -80), {
-          count: 460,
+        new FireworkShell(this.scene, this.fireworks, {
+          from: new THREE.Vector3(12, 2.5, -80),
+          to: new THREE.Vector3(12, 22, -80),
+          kind: 'peony',
           color: 0xffc07a,
-          spread: 1.5,
-          speed: 7.5,
-          size: 0.5,
-          life: 2.2,
-          gravity: 2,
-          shell: true,
+          radius: 20,
+          life: 2.6,
+          count: 560,
+          onLaunch: () => this.audio.whistle(1.05),
+          onBurst: () => {
+            this.audio.boom(0.5)
+            this.audio.crackle(0.5)
+          },
         }),
       )
-      this.audio.boom(0.5)
       this.pushHud()
     }
     if (t > 5.0 && this.showStage === 3) {
       this.showStage = 4
       this.effects.push(
-        new ParticleBurst(this.scene, this.glow, new THREE.Vector3(-10, 26, -78), {
-          count: 460,
+        new FireworkShell(this.scene, this.fireworks, {
+          from: new THREE.Vector3(-10, 2.5, -78),
+          to: new THREE.Vector3(-10, 26, -78),
+          kind: 'ring',
           color: 0xff8f60,
-          spread: 1.5,
-          speed: 7.5,
-          size: 0.5,
-          life: 2.2,
-          gravity: 2,
-          shell: true,
+          accent: 0xffe3b4,
+          radius: 24,
+          life: 2.6,
+          count: 520,
+          onLaunch: () => this.audio.whistle(1.05),
+          onBurst: () => this.audio.boom(0.55),
         }),
       )
       this.effects.push(
-        new ParticleBurst(this.scene, this.glow, new THREE.Vector3(16, 20, -86), {
-          count: 420,
+        new FireworkShell(this.scene, this.fireworks, {
+          from: new THREE.Vector3(16, 2.5, -86),
+          to: new THREE.Vector3(16, 20, -86),
+          kind: 'chrysanthemum',
           color: 0xffdfae,
-          spread: 1.5,
-          speed: 7,
-          size: 0.46,
-          life: 2.1,
-          gravity: 2,
-          shell: true,
+          radius: 18,
+          life: 3.2,
+          count: 480,
+          ascent: 1.2,
+          onLaunch: () => this.audio.whistle(1.2),
+          onBurst: () => {
+            this.audio.boom(0.4)
+            this.audio.crackle(0.7)
+          },
         }),
       )
-      this.audio.boom(0.7)
       this.pushHud()
     }
     if (t > 7.4 && this.showStage === 4) {
       this.showStage = 5
       this.cb.onToast('灯会到了最亮的时候')
-      this.effects.push(new IronFlower(this.scene, this.glow, new THREE.Vector3(-15, 3.6, -84)))
+      this.effects.push(
+        new IronFlower(this.scene, this.fireworks, new THREE.Vector3(-15, 3.6, -84)),
+      )
       this.pushHud()
     }
     if (t > 11.5 && this.showStage === 5) {
       this.showStage = 6
       this.effects.push(
-        new ParticleBurst(this.scene, this.glow, new THREE.Vector3(-8, 28, -76), {
-          count: 520,
+        new FireworkShell(this.scene, this.fireworks, {
+          from: new THREE.Vector3(-8, 2.5, -76),
+          to: new THREE.Vector3(-8, 28, -76),
+          kind: 'double',
           color: 0xffd8a8,
-          spread: 1.5,
-          speed: 8,
-          size: 0.52,
-          life: 2.3,
-          gravity: 1.9,
-          shell: true,
+          accent: 0x9fd8ff,
+          radius: 27,
+          life: 2.8,
+          count: 620,
+          flash: 1.3,
+          onLaunch: () => this.audio.whistle(1.05),
+          onBurst: () => this.audio.boom(0.65),
         }),
       )
       this.effects.push(
-        new ParticleBurst(this.scene, this.glow, new THREE.Vector3(14, 24, -82), {
-          count: 460,
+        new FireworkShell(this.scene, this.fireworks, {
+          from: new THREE.Vector3(14, 2.5, -82),
+          to: new THREE.Vector3(14, 24, -82),
+          kind: 'willow',
           color: 0xff9a5a,
-          spread: 1.5,
-          speed: 7.5,
-          size: 0.5,
-          life: 2.2,
-          gravity: 2,
-          shell: true,
+          accent: 0xffe3b4,
+          radius: 22,
+          life: 3.0,
+          count: 520,
+          ascent: 1.25,
+          onLaunch: () => this.audio.whistle(1.25),
+          onBurst: () => {
+            this.audio.boom(0.5)
+            this.audio.crackle(0.9)
+          },
         }),
       )
-      this.audio.boom(0.6)
       this.pushHud()
     }
     if (t > 16 && this.showStage === 6) {
       this.showStage = 7
-      this.effects.push(new IronFlower(this.scene, this.glow, new THREE.Vector3(0, 4.8, -40)))
+      this.effects.push(new IronFlower(this.scene, this.fireworks, new THREE.Vector3(0, 4.8, -40)))
       this.audio.boom(0.7)
       this.pushHud()
     }
@@ -1727,16 +1770,18 @@ export class ShangyuanScene {
 
     this.towerPulse = t < 1.2 ? t / 1.2 : Math.max(0.25, 1 - (t - 1.2) / 24)
     for (const s of this.towerGlow) {
-      s.material.opacity = Math.min(0.95, 0.16 + this.towerPulse * 1.5)
-      s.scale.setScalar(5.2 + this.towerPulse * 5)
+      // A halo behind the tiers, not a lamp in front of them: additive discs
+      // at full opacity erase the tower they are meant to light.
+      s.material.opacity = Math.min(0.32, 0.12 + this.towerPulse * 0.26)
+      s.scale.setScalar(6.2 + this.towerPulse * 2.4)
     }
     if (t > 26) {
       this.showClock = -1
       this.showStage = 0
       this.towerPulse = 0
       for (const s of this.towerGlow) {
-        s.material.opacity = 0.16
-        s.scale.setScalar(5.2)
+        s.material.opacity = 0.12
+        s.scale.setScalar(6.2)
       }
       this.pushHud()
     }
@@ -1751,8 +1796,18 @@ export class ShangyuanScene {
     this.nextFirework -= dt
     if (this.nextFirework > 0) return
     this.nextFirework = 8 + Math.random() * 9
-    const palette = [0xffc07a, 0xff9a6a, 0xff8f9e, 0xffd8a8, 0x9fd8ff]
+    const palette = [0xffc07a, 0xff9a6a, 0xff8f9e, 0xffd8a8, 0x9fd8ff, 0x9fe8c0, 0xc39bff]
+    const kinds: ShellKind[] = [
+      'peony',
+      'peony',
+      'chrysanthemum',
+      'willow',
+      'ring',
+      'double',
+      'glitter',
+    ]
     const color = palette[Math.floor(Math.random() * palette.length)]
+    const kind = kinds[Math.floor(Math.random() * kinds.length)]
     // Place the shell ahead of the player so the beat always lands in frame.
     const dist = 70 + Math.random() * 45
     const side = (Math.random() - 0.5) * 60
@@ -1760,15 +1815,17 @@ export class ShangyuanScene {
     const z = this.player.z + Math.sin(this.yaw) * dist + Math.cos(this.yaw) * side
     const y = 32 + Math.random() * 16
     this.effects.push(
-      new ParticleBurst(this.scene, this.glow, new THREE.Vector3(x, y, z), {
-        count: 560,
+      new FireworkShell(this.scene, this.fireworks, {
+        from: new THREE.Vector3(x, 2.5, z),
+        to: new THREE.Vector3(x, y, z),
+        kind,
         color,
-        spread: 1.4,
-        speed: 10.5,
-        size: 2.2,
-        life: 2.8,
-        gravity: 1.6,
-        shell: true,
+        radius: 20 + Math.random() * 10,
+        life: 2.6 + Math.random() * 0.8,
+        count: 480 + Math.floor(Math.random() * 220),
+        ascent: 0.95 + Math.random() * 0.35,
+        flash: 1.1,
+        onBurst: () => this.audio.boom(0.35),
       }),
     )
   }

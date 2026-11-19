@@ -1,9 +1,9 @@
 {
   "scene": "SM_Scene_LanternRiver_Night",
   "blend": "D:\\Coding\\wowland\\packages\\assets\\lantern-river\\exports\\SM_Scene_LanternRiver_Night.blend",
-  "mesh_objects": 4992,
-  "triangles": 1054811,
-  "materials": 75,
+  "mesh_objects": 9112,
+  "triangles": 1111451,
+  "materials": 80,
   "lights": 97,
   "cameras": [
     "CAM_Boat",
@@ -69,16 +69,16 @@
     "BLD_R_PlazaBack_01",
     "BLD_R_PlazaBack_02",
     "BLD_R_Restaurant_00",
+    "BLD_RoofBack_L_00_Barge_-1_-1",
+    "BLD_RoofBack_L_00_Barge_-1_1",
+    "BLD_RoofBack_L_00_Barge_1_-1",
+    "BLD_RoofBack_L_00_Barge_1_1",
     "BLD_RoofBack_L_00_BeltX2_0.46",
     "BLD_RoofBack_L_00_BeltX2_0.8",
     "BLD_RoofBack_L_00_BeltX_0.46",
     "BLD_RoofBack_L_00_BeltX_0.8",
     "BLD_RoofBack_L_00_BeltY2_0.46",
     "BLD_RoofBack_L_00_BeltY2_0.8",
-    "BLD_RoofBack_L_00_BeltY_0.46",
-    "BLD_RoofBack_L_00_BeltY_0.8",
-    "BLD_RoofBack_L_00_Body",
-    "BLD_RoofBack_L_00_Corner_-1_-1",
-    "BLD_RoofBack_L_00_Corner_-1_1"
+    "BLD_RoofBack_L_00_BeltY_0.46"
   ]
 }

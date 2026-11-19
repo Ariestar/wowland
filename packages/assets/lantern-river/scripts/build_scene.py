@@ -18,7 +18,7 @@ import json
 import math
 import os
 import random
-from mathutils import Matrix, Vector
+from mathutils import Euler, Matrix, Vector
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSET_DIR = os.path.dirname(HERE)
@@ -318,11 +318,24 @@ def move_to_collection(obj, col):
 
 
 def add_box(name, size, location, material, collection, rotation=(0, 0, 0), bevel=0.0):
-    bpy.ops.mesh.primitive_cube_add(size=1.0, location=location, rotation=rotation)
-    obj = bpy.context.object
-    obj.name = name
-    obj.scale = size
-    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    # Built from raw vertex data on purpose: `primitive_cube_add` plus
+    # `transform_apply` costs a full depsgraph update per box, which turns a
+    # scene with thousands of trims into an hour-long build.
+    sx, sy, sz = size[0] * 0.5, size[1] * 0.5, size[2] * 0.5
+    verts = [(-sx, -sy, -sz), (sx, -sy, -sz), (sx, sy, -sz), (-sx, sy, -sz),
+             (-sx, -sy, sz), (sx, -sy, sz), (sx, sy, sz), (-sx, sy, sz)]
+    faces = [(0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4),
+             (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(verts, [], faces)
+    mesh.validate()
+    mesh.update()
+    mesh.transform(
+        Matrix.Translation(location) @ Euler(rotation, 'XYZ').to_matrix().to_4x4()
+    )
+    obj = bpy.data.objects.new(name, mesh)
+    mesh.materials.append(material)
+    move_to_collection(obj, collection)
     if bevel > 0:
         mod = obj.modifiers.new("Bevel", "BEVEL")
         mod.width = bevel
@@ -330,52 +343,95 @@ def add_box(name, size, location, material, collection, rotation=(0, 0, 0), beve
         mod.limit_method = "ANGLE"
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.modifier_apply(modifier=mod.name)
-    obj.data.materials.append(material)
+    return obj
+
+
+def _primitive_mesh(name, build, location, rotation, material, collection,
+                    scale=None, smooth=False):
+    """Turn a bmesh primitive into an object without touching `bpy.ops`.
+
+    Every operator call rebuilds the depsgraph, so a scene of a few thousand
+    lanterns, posts and trims spends its whole build inside Blender's update
+    sweep.  Building the mesh directly keeps the geometry identical and the
+    build minutes shorter.
+    """
+    mesh = bpy.data.meshes.new(name)
+    bm = bmesh.new()
+    build(bm)
+    bm.to_mesh(mesh)
+    bm.free()
+    mesh.validate()
+    mesh.update()
+    if smooth:
+        for poly in mesh.polygons:
+            poly.use_smooth = True
+    matrix = Matrix.Translation(location) @ Euler(rotation, 'XYZ').to_matrix().to_4x4()
+    if scale:
+        matrix = matrix @ Matrix.Diagonal((scale[0], scale[1], scale[2], 1.0))
+    mesh.transform(matrix)
+    obj = bpy.data.objects.new(name, mesh)
+    mesh.materials.append(material)
     move_to_collection(obj, collection)
     return obj
 
 
 def add_cylinder(name, vertices, radius, depth, location, material, collection,
                  rotation=(0, 0, 0)):
-    bpy.ops.mesh.primitive_cylinder_add(vertices=vertices, radius=radius, depth=depth,
-                                        end_fill_type="TRIFAN", location=location,
-                                        rotation=rotation)
-    obj = bpy.context.object
-    obj.name = name
-    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-    obj.data.materials.append(material)
-    move_to_collection(obj, collection)
-    return obj
+    return _primitive_mesh(
+        name,
+        lambda bm: bmesh.ops.create_cone(
+            bm, cap_ends=True, cap_tris=True, segments=vertices,
+            radius1=radius, radius2=radius, depth=depth),
+        location, rotation, material, collection)
 
 
 def add_sphere(name, radius, location, material, collection, segments=12, rings=6,
                scale=None):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=segments, ring_count=rings,
-                                         radius=radius, location=location)
-    obj = bpy.context.object
-    obj.name = name
-    if scale:
-        obj.scale = scale
-    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-    for poly in obj.data.polygons:
-        poly.use_smooth = True
-    obj.data.materials.append(material)
-    move_to_collection(obj, collection)
-    return obj
+    return _primitive_mesh(
+        name,
+        lambda bm: bmesh.ops.create_uvsphere(
+            bm, u_segments=segments, v_segments=rings, radius=radius),
+        location, (0, 0, 0), material, collection, scale=scale, smooth=True)
 
 
 def add_cone(name, vertices, radius1, radius2, depth, location, material, collection,
              rotation=(0, 0, 0), scale=None):
-    bpy.ops.mesh.primitive_cone_add(vertices=vertices, radius1=radius1,
-                                    radius2=radius2, depth=depth,
-                                    end_fill_type="TRIFAN", location=location,
-                                    rotation=rotation)
-    obj = bpy.context.object
-    obj.name = name
-    if scale:
-        obj.scale = scale
-    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-    obj.data.materials.append(material)
+    return _primitive_mesh(
+        name,
+        lambda bm: bmesh.ops.create_cone(
+            bm, cap_ends=True, cap_tris=True, segments=vertices,
+            radius1=radius1, radius2=radius2, depth=depth),
+        location, rotation, material, collection, scale=scale)
+
+
+def add_torus(name, major_radius, minor_radius, location, material, collection,
+              rotation=(0, 0, 0), major_segments=12, minor_segments=6):
+    verts = []
+    faces = []
+    for i in range(major_segments):
+        a = math.tau * i / major_segments
+        ca, sa = math.cos(a), math.sin(a)
+        for j in range(minor_segments):
+            b = math.tau * j / minor_segments
+            ring = major_radius + minor_radius * math.cos(b)
+            verts.append((ring * ca, ring * sa, minor_radius * math.sin(b)))
+    for i in range(major_segments):
+        ni = (i + 1) % major_segments
+        for j in range(minor_segments):
+            nj = (j + 1) % minor_segments
+            faces.append((i * minor_segments + j, ni * minor_segments + j,
+                          ni * minor_segments + nj, i * minor_segments + nj))
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(verts, [], faces)
+    mesh.validate()
+    mesh.update()
+    for poly in mesh.polygons:
+        poly.use_smooth = True
+    mesh.transform(
+        Matrix.Translation(location) @ Euler(rotation, 'XYZ').to_matrix().to_4x4()
+    )
+    obj = bpy.data.objects.new(name, mesh)
+    mesh.materials.append(material)
     move_to_collection(obj, collection)
     return obj
 
@@ -711,6 +767,45 @@ for side in (-1, 1):
             (side * (RIVER_HALF + 0.02), 20, 0.17),
             principled(f"MAT_SCENE_Algae_{side}", "#1B2A2A", roughness=0.9), COL_BANKS)
 
+# Paving detail.  The procedural paving supplies the slab colour, but a 380 m
+# strip needs real edges to read as built stone: a kerb against the shopfronts,
+# a border inside the coping, cross joints every 3.2 m, coping joints and iron
+# mooring rings on the river face.  These are the near-field lines that hold up
+# when the camera walks the promenade.
+MAT_KERB = principled("MAT_SCENE_KerbStone", "#7A7682", roughness=0.72,
+                      bump=0.16, bump_scale=22)
+MAT_PAVE_JOINT = principled("MAT_SCENE_PaveJoint", "#33313C", roughness=0.85)
+MAT_IRON = principled("MAT_SCENE_Iron", "#22222A", roughness=0.42, metallic=0.72)
+PAVE_INNER = RIVER_HALF + 2.35
+PAVE_OUTER = RIVER_HALF + PROMENADE - 0.35
+for side in (-1, 1):
+    add_box(f"ENV_KerbShop_{side}", (0.62, 380, 0.05),
+            (side * (RIVER_HALF + PROMENADE - 0.34), 20, GROUND_Z + 0.018),
+            MAT_KERB, COL_BANKS)
+    add_box(f"ENV_KerbWater_{side}", (0.50, 380, 0.05),
+            (side * (RIVER_HALF + 2.35), 20, GROUND_Z + 0.018),
+            MAT_KERB, COL_BANKS)
+    pave_span = PAVE_OUTER - PAVE_INNER
+    pave_mid = (PAVE_OUTER + PAVE_INNER) / 2.0
+    for i in range(120):
+        add_box(f"ENV_PaveJoint_{side}_{i}", (pave_span, 0.04, 0.045),
+                (side * pave_mid, -170.0 + i * 3.2, GROUND_Z + 0.012),
+                MAT_PAVE_JOINT, COL_BANKS)
+    for i in range(158):
+        add_box(f"ENV_CopingJoint_{side}_{i}", (1.95, 0.05, 0.03),
+                (side * (RIVER_HALF + 0.80), -170.0 + i * 2.4, 1.327),
+                MAT_PAVE_JOINT, COL_BANKS)
+    for i in range(27):
+        ring_y = -168.0 + i * 14.0
+        add_box(f"ENV_MooringPlate_{side}_{i}", (0.09, 0.30, 0.38),
+                (side * (RIVER_HALF - 0.02), ring_y, 1.02),
+                MAT_IRON, COL_BANKS)
+        add_torus(f"ENV_MooringRing_{side}_{i}", 0.17, 0.032,
+                  (side * (RIVER_HALF - 0.10), ring_y, 0.80),
+                  MAT_IRON, COL_BANKS,
+                  rotation=(0, math.pi / 2, 0),
+                  major_segments=10, minor_segments=5)
+
 # Steps into the water at two ferry points on the right bank.
 for y in (-48.0, 118.0):
     for i in range(5):
@@ -925,6 +1020,20 @@ for index, (source, y, z_scale) in enumerate((
 # carry a few lit windows without paying for full facades the player never sees.
 # ---------------------------------------------------------------------------
 
+_ROOF_RIB_MATS = {}
+
+
+def roof_rib_material(roof_mat):
+    """A darker companion to the roof tile so each course reads as a ridge."""
+    cached = _ROOF_RIB_MATS.get(roof_mat.name)
+    if cached is not None:
+        return cached
+    base = "#333F45" if roof_mat.name.endswith("Tile") else "#31413F"
+    rib = principled(roof_mat.name + "_Rib", base, roughness=0.5)
+    _ROOF_RIB_MATS[roof_mat.name] = rib
+    return rib
+
+
 def build_roof_block(name, center_x, center_y, width, depth, body_h, roof_h,
                      wall_mat, roof_mat, lit=3, detail=True):
     z0 = GROUND_Z
@@ -951,6 +1060,70 @@ def build_roof_block(name, center_x, center_y, width, depth, body_h, roof_h,
         (3, 0, 4),
     ]
     add_mesh_object(f"{name}_Roof", verts, faces, roof_mat, COL_BUILDINGS)
+    # Roof detail.  A bare gable reads as a flat card at skyline distance, so
+    # every block gets a capped ridge with end finials, combed tile courses,
+    # eave fascia, gable bargeboards and upturned eave horns.  The courses are
+    # clipped to the trapezoid of each slope so nothing pokes above the ridge.
+    rib_mat = roof_rib_material(roof_mat)
+    eave_z = z0 + body_h
+    ridge_z = eave_z + roof_h
+    slope_len = math.hypot(half_d, roof_h)
+    slope_angle = math.atan2(roof_h, half_d)
+    normal_y = roof_h / slope_len
+    normal_z = half_d / slope_len
+    rib_gap = 0.82 if detail else 1.5
+    rib_count = max(4, int(2.0 * half_w / rib_gap))
+    for slope in (-1, 1):
+        for i in range(rib_count + 1):
+            rx = center_x - half_w + 2.0 * half_w * i / rib_count
+            reach = abs(rx - center_x)
+            t0 = 0.0
+            if reach > ridge:
+                t0 = (reach - ridge) / max(half_w - ridge, 0.001)
+            if t0 > 0.94:
+                continue
+            mid_t = (1.0 + t0) / 2.0
+            add_box(
+                f"{name}_Rib_{'F' if slope > 0 else 'B'}_{i:02d}",
+                (0.06, (1.0 - t0) * slope_len, 0.055),
+                (rx,
+                 center_y + slope * (half_d * mid_t + normal_y * 0.04),
+                 eave_z + roof_h * (1.0 - mid_t) + normal_z * 0.04),
+                rib_mat, COL_BUILDINGS,
+                rotation=(-slope * slope_angle, 0, 0),
+            )
+    add_box(f"{name}_Ridge", (2.0 * ridge + 0.55, 0.46, 0.20),
+            (center_x, center_y, ridge_z + 0.07), rib_mat, COL_BUILDINGS)
+    add_box(f"{name}_RidgeCap", (2.0 * ridge + 0.34, 0.26, 0.16),
+            (center_x, center_y, ridge_z + 0.22), rib_mat, COL_BUILDINGS)
+    for sx in (-1, 1):
+        add_box(f"{name}_RidgeFin_{sx}", (0.30, 0.34, 0.54),
+                (center_x + sx * (ridge + 0.30), center_y, ridge_z + 0.30),
+                rib_mat, COL_BUILDINGS, rotation=(0, sx * 0.40, 0))
+    for sy in (-1, 1):
+        add_box(f"{name}_Fascia_{sy}", (2.0 * half_w + 0.06, 0.16, 0.24),
+                (center_x, center_y + sy * half_d, eave_z - 0.03),
+                rib_mat, COL_BUILDINGS)
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            add_box(f"{name}_Barge_{sx}_{sy}", (0.10, slope_len, 0.22),
+                    (center_x + sx * (half_w - 0.03),
+                     center_y + sy * half_d / 2.0,
+                     eave_z + roof_h / 2.0),
+                    rib_mat, COL_BUILDINGS,
+                    rotation=(-sy * slope_angle, 0, 0))
+        add_box(f"{name}_GableDrop_{sx}", (0.08, 0.18, 0.46),
+                (center_x + sx * (half_w + 0.04), center_y, ridge_z - 0.30),
+                rib_mat, COL_BUILDINGS)
+    if detail:
+        for sx in (-1, 1):
+            for sy in (-1, 1):
+                add_box(f"{name}_Horn_{sx}_{sy}", (1.15, 0.15, 0.13),
+                        (center_x + sx * (half_w + 0.06),
+                         center_y + sy * (half_d - 0.04),
+                         eave_z + 0.20),
+                        rib_mat, COL_BUILDINGS,
+                        rotation=(0, -sx * 0.36, 0))
     river_sign = -1.0 if center_x > 0 else 1.0
     if not detail:
         # Far skyline row: a plinth, a timber belt and one lit window band keep
@@ -1019,6 +1192,14 @@ def build_roof_block(name, center_x, center_y, width, depth, body_h, roof_h,
             add_box(f"{name}_Win_{r}_{i}", (0.06, 0.52, 0.86),
                     (wx + river_sign * 0.025, wy, wz),
                     MAT_LR_Paper_Glow, COL_BUILDINGS)
+            # One stile and two rails turn each lit pane into a shoji lattice.
+            mull_x = wx + river_sign * 0.062
+            add_box(f"{name}_WinMull_{r}_{i}", (0.035, 0.055, 0.86),
+                    (mull_x, wy, wz), MAT_LR_Wood_Dark, COL_BUILDINGS)
+            for hz in (-1, 1):
+                add_box(f"{name}_WinRail_{r}_{i}_{hz}", (0.035, 0.52, 0.05),
+                        (mull_x, wy, wz + hz * 0.22),
+                        MAT_LR_Wood_Dark, COL_BUILDINGS)
     # Side-wall panes keep the gaps between shops from reading as blank walls.
     for s, sy in ((0, -1), (1, 1)):
         for r, rz in enumerate((0.40, 0.70)):
@@ -1027,6 +1208,9 @@ def build_roof_block(name, center_x, center_y, width, depth, body_h, roof_h,
             wz = z0 + body_h * rz
             add_box(f"{name}_SideWin_{s}_{r}", (0.62, 0.06, 0.82),
                     (wx, wy, wz), MAT_LR_Paper_Glow, COL_BUILDINGS)
+            add_box(f"{name}_SideMull_{s}_{r}", (0.045, 0.035, 0.82),
+                    (wx, wy + sy * 0.05, wz), MAT_LR_Wood_Dark,
+                    COL_BUILDINGS)
     # A small tiled eave over the lower windows.
     add_box(f"{name}_Eave", (0.60, depth + 0.55, 0.10),
             (center_x + river_sign * (width / 2.0 + 0.24), center_y,
@@ -1504,6 +1688,31 @@ def add_tea_cart(name, x, y, z, facing=1.0):
                radius=0.20)
 
 
+def add_paper_umbrella(name, x, y, z, radius=0.62, height=1.98,
+                       canopy_mat=MAT_LR_Lacquer_Red):
+    """A bamboo-ribbed oil-paper umbrella, the market's brightest small prop.
+
+    Twelve gold ribs under the canopy catch lantern light from below, so the
+    umbrella reads as a lit object at eye height instead of a dark disc.
+    """
+    add_cylinder(f"{name}_Shaft", 8, 0.026, height, (x, y, z + height / 2.0),
+                 MAT_LR_Wood_Warm, COL_PROPS)
+    rim_z = z + height
+    add_cone(f"{name}_Canopy", 20, radius, 0.035, 0.30,
+             (x, y, rim_z + 0.13), canopy_mat, COL_PROPS)
+    for i in range(12):
+        angle = i * math.tau / 12.0
+        add_box(f"{name}_Rib_{i}", (radius * 0.94, 0.022, 0.022),
+                (x + math.cos(angle) * radius * 0.45,
+                 y + math.sin(angle) * radius * 0.45,
+                 rim_z + 0.115),
+                MAT_LR_Gold, COL_PROPS, rotation=(0, 0.44, angle))
+    add_sphere(f"{name}_Finial", 0.05, (x, y, rim_z + 0.30),
+               MAT_LR_Gold, COL_PROPS, segments=8, rings=4)
+    add_cylinder(f"{name}_Foot", 8, 0.16, 0.06, (x, y, z + 0.03),
+                 MAT_QUAY, COL_PROPS)
+
+
 prop_rng = random.Random(SEED + 606)
 for i, (side, y, _kind) in enumerate(stall_specs):
     facade_x = side * (RIVER_HALF + PROMENADE)
@@ -1636,6 +1845,30 @@ for i, (side, y) in enumerate(((1, -30.0), (1, 112.0), (-1, 92.0))):
     add_tea_cart(f"PROP_TeaCart_{i}", side * 17.0, y, GROUND_Z, facing=-side)
     add_figure(f"PROP_Figure_Cart_{i}", side * 16.0, y + 1.4, GROUND_Z,
                robe=MAT_CREAM if i % 2 else MAT_INDIGO, lantern=False)
+
+# Oil-paper umbrellas lean by the carts and in the gaps between stalls.  They
+# carry the two brightest colours on the street into the middle of the frame.
+for i, (side, y, mat) in enumerate((
+    (1, -33.5, MAT_LR_Lacquer_Red), (1, 108.5, MAT_LR_Cloth_Cream),
+    (-1, 87.0, MAT_LR_Lacquer_Red), (1, 52.0, MAT_LR_Cloth_Cream),
+    (-1, 18.0, MAT_LR_Lacquer_Red), (1, -50.0, MAT_LR_Cloth_Cream),
+    (-1, -20.0, MAT_LR_Lacquer_Red), (1, -96.0, MAT_LR_Lacquer_Red),
+)):
+    add_paper_umbrella(f"PROP_Umbrella_{i}", side * 18.4, y, GROUND_Z,
+                       canopy_mat=mat)
+add_paper_umbrella("PROP_Umbrella_Plaza", 26.5, 58.0, GROUND_Z,
+                   canopy_mat=MAT_LR_Cloth_Cream)
+
+# Wine jars stacked by the shopfronts: three sizes in a cluster so the row of
+# cylinders reads as a delivery rather than a repeated asset.
+for i, (side, y) in enumerate(((1, -76.0), (1, 58.0), (-1, 24.0),
+                               (-1, 126.0))):
+    base_x = side * 18.5
+    for j, (dx, dy, radius) in enumerate(((0.0, 0.0, 0.26),
+                                          (0.46, 0.14, 0.21),
+                                          (0.10, 0.42, 0.18))):
+        add_jar(f"PROP_JarStack_{i}_{j}", base_x + side * dx, y + dy,
+                GROUND_Z, radius=radius)
 
 # A few more pots and benches at the quiet ends of the promenade.
 for i, (x, y) in enumerate(((17.0, -92.0), (15.2, -70.0), (-17.0, -44.0),
