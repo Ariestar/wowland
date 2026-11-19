@@ -14,6 +14,7 @@
     "check": "pnpm typecheck && pnpm lint",
     "verify": "pnpm check && pnpm build",
     "verify:visual": "pnpm --filter @wowland/web exec node scripts/shangyuan/capture.cjs",
+    "verify:final-visual": "pnpm --filter @wowland/web exec node scripts/shangyuan/final-visual.cjs",
     "verify:flow": "pnpm --filter @wowland/web exec node scripts/shangyuan/playtest.cjs",
     "verify:mobile": "pnpm --filter @wowland/web exec node scripts/shangyuan/mobile.cjs",
     "verify:combos": "pnpm --filter @wowland/web exec node scripts/shangyuan/combos.cjs",

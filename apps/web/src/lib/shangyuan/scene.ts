@@ -26,6 +26,7 @@ import {
 import { type Effect, Ripple, RiverAtmosphere } from './effects'
 import { FireworkShell, FireworkSystem, IronFlower, type ShellKind } from './fireworks'
 import { WaterlineFlora } from './flora'
+import { AmbientPetals } from './petals'
 import { gradingShader, sanitizeShader } from './postFx'
 import type { Panel, Phase, Prompt, SceneCallbacks } from './types'
 import { batTexture, createWaterMaterial, glowTexture, skyLanternTexture } from './water'
@@ -129,6 +130,7 @@ export class ShangyuanScene {
   private readonly glow: THREE.Texture
   private readonly skyGlow: THREE.Texture
   private readonly fireworks: FireworkSystem
+  private readonly petals: AmbientPetals
   private skyLanterns: {
     points: THREE.Points
     positions: Float32Array
@@ -259,6 +261,9 @@ export class ShangyuanScene {
     this.skyGlow = skyLanternTexture()
     this.fireworks = new FireworkSystem(this.glow)
     this.scene.add(this.fireworks.object)
+    const petalTexture = new THREE.TextureLoader().load(`${MODEL_BASE}blossom_petal.jpg`)
+    this.petals = new AmbientPetals(petalTexture)
+    this.scene.add(this.petals.object)
     // Five bright discs over the freshest player lanterns.
     const ownerGlowGeo = new THREE.BufferGeometry()
     const ownerGlowAttr = new THREE.BufferAttribute(this.ownerGlowPositions, 3)
@@ -819,7 +824,7 @@ export class ShangyuanScene {
   // ---------------------------------------------------------------- loading
 
   async load() {
-    const total = 6
+    const total = 7
     let done = 0
     const tick = () => {
       done++
@@ -893,6 +898,13 @@ export class ShangyuanScene {
       tick()
     })
 
+    const detailJob = this.loader
+      .loadAsync(`${MODEL_BASE}kit/SM_Prop_Lantern_Hung_01.glb`)
+      .then((gltf) => {
+        this.buildEntranceLanterns(gltf.scene)
+        tick()
+      })
+
     const templates = [
       'model-river-lantern-lotus',
       'model-river-lantern-paperboat',
@@ -914,7 +926,7 @@ export class ShangyuanScene {
       tick()
     })
 
-    await Promise.all([layoutJob, worldJob, ...templateJobs])
+    await Promise.all([layoutJob, worldJob, detailJob, ...templateJobs])
     this.addGroundGlow()
     this.seedAmbientLanterns()
     this.buildCat()
@@ -1221,6 +1233,88 @@ export class ShangyuanScene {
     this.cb.onToast(
       this.collisionDebug.visible ? '碰撞可见：青色可行走 · 橙色阻挡' : '碰撞线框已关闭',
     )
+  }
+
+  /** Instanced public-kit lanterns add near-view detail without one draw call per copy. */
+  private buildEntranceLanterns(source: THREE.Object3D) {
+    const maxAnisotropy = this.renderer.capabilities.getMaxAnisotropy()
+    const parts: { geometry: THREE.BufferGeometry; material: THREE.Material }[] = []
+    source.updateMatrixWorld(true)
+    source.traverse((object) => {
+      const mesh = object as THREE.Mesh
+      if (!mesh.isMesh) return
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      for (const material of mats) {
+        const std = material as THREE.MeshStandardMaterial
+        if (std.name === 'MAT_LR_Paper_Glow') std.emissiveIntensity = 1.8
+        std.envMapIntensity = 0.9
+        for (const key of ['map', 'normalMap', 'roughnessMap'] as const) {
+          const texture = std[key]
+          if (texture) {
+            texture.anisotropy = maxAnisotropy
+            texture.needsUpdate = true
+          }
+        }
+      }
+
+      const worldGeometry = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld)
+      const index = worldGeometry.getIndex()
+      if (worldGeometry.groups.length > 1 && index) {
+        for (const group of worldGeometry.groups) {
+          const part = worldGeometry.clone()
+          const indices: number[] = []
+          for (let i = group.start; i < group.start + group.count; i++) {
+            indices.push(index.getX(i))
+          }
+          part.setIndex(indices)
+          part.clearGroups()
+          parts.push({ geometry: part, material: mats[group.materialIndex ?? 0] ?? mats[0] })
+        }
+        worldGeometry.dispose()
+      } else {
+        parts.push({ geometry: worldGeometry, material: mats[0] })
+      }
+    })
+    source.traverse((object) => {
+      const mesh = object as THREE.Mesh
+      if (mesh.isMesh) mesh.geometry.dispose()
+    })
+
+    const spots = [
+      { x: 13.8, y: 4.5, z: -123.4, yaw: 0.12, scale: 1.35 },
+      { x: 18.4, y: 4.5, z: -123.4, yaw: -0.18, scale: 1.35 },
+      { x: 14.1, y: 4.15, z: -118.8, yaw: 0.34, scale: 1.35 },
+      { x: 18.1, y: 4.15, z: -118.8, yaw: -0.28, scale: 1.35 },
+      { x: 13.2, y: 3.9, z: -109, yaw: 0.22, scale: 1.5 },
+      { x: 19.1, y: 3.7, z: -104, yaw: -0.24, scale: 1.5 },
+      { x: 12.9, y: 3.9, z: -96, yaw: 0.3, scale: 1.5 },
+      { x: 19.4, y: 3.8, z: -92, yaw: -0.3, scale: 1.5 },
+    ]
+    const batch = new THREE.Group()
+    batch.name = 'EntranceKitLanternBatch'
+    batch.userData.lanternCount = spots.length
+
+    const matrix = new THREE.Matrix4()
+    const position = new THREE.Vector3()
+    const quaternion = new THREE.Quaternion()
+    const scale = new THREE.Vector3()
+    for (const part of parts) {
+      const instances = new THREE.InstancedMesh(part.geometry, part.material, spots.length)
+      instances.name = 'EntranceKitLantern'
+      instances.castShadow = true
+      instances.receiveShadow = true
+      spots.forEach((spot, index) => {
+        position.set(spot.x, spot.y, spot.z)
+        quaternion.setFromAxisAngle(UP, spot.yaw)
+        scale.setScalar(spot.scale)
+        matrix.compose(position, quaternion, scale)
+        instances.setMatrixAt(index, matrix)
+      })
+      instances.instanceMatrix.needsUpdate = true
+      instances.computeBoundingSphere()
+      batch.add(instances)
+    }
+    this.scene.add(batch)
   }
 
   private prepareTower(_root: THREE.Object3D) {
@@ -1805,6 +1899,11 @@ export class ShangyuanScene {
         ),
       ),
       obstacles: this.obstacleField ? this.layout?.obstacles.length : 0,
+      ambientPetals: this.petals.object.geometry.getAttribute('position').count,
+      entranceKitLanterns: this.scene.children.reduce((total, object) => {
+        const count = object.userData.lanternCount
+        return total + (typeof count === 'number' ? count : 0)
+      }, 0),
       ground: +this.playerGround.toFixed(2),
       reflection: Boolean(this.reflectionTarget),
       phase: this.phase,
@@ -1960,6 +2059,7 @@ export class ShangyuanScene {
     this.updateLanterns(dt)
     this.updateSkyLanterns(dt)
     this.fireworks.update(dt)
+    this.petals.update(this.player, this.clock.elapsedTime)
     this.updateShow(eventDt)
     this.updateAmbientFireworks(dt)
     this.updateEffects(dt)
@@ -2630,6 +2730,7 @@ export class ShangyuanScene {
     this.blessings = []
     this.atmosphere.dispose(this.scene)
     this.flora?.dispose()
+    this.petals.dispose()
     this.audio.dispose()
     this.scene.traverse((o) => {
       const mesh = o as THREE.Mesh
