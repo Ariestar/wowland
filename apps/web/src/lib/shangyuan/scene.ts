@@ -5,6 +5,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
+import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShangyuanAudio } from './audio'
 import { type CollisionLayout, ObstacleField, WalkableGround } from './collision'
@@ -42,6 +43,16 @@ function reflectionBudget(): boolean {
   return (navigator.hardwareConcurrency ?? 8) >= 6
 }
 
+/**
+ * Desktop machines get the sharper pipeline: the full device pixel ratio, a
+ * 4K shadow map and post-process antialiasing.  Touch devices keep the lighter
+ * settings that hold their frame budget.
+ */
+function highQuality(): boolean {
+  if (window.matchMedia('(pointer: coarse)').matches) return false
+  return (navigator.hardwareConcurrency ?? 8) >= 8
+}
+
 export class ShangyuanScene {
   private readonly canvas: HTMLCanvasElement
   private readonly cb: SceneCallbacks
@@ -57,6 +68,7 @@ export class ShangyuanScene {
   private readonly audio = new ShangyuanAudio()
 
   private readonly waterMat: THREE.ShaderMaterial
+  private readonly highTier = highQuality()
   private worldReady = false
   private shadowFrames = 0
   private shadowFrozen = false
@@ -137,12 +149,12 @@ export class ShangyuanScene {
       antialias: true,
       powerPreference: 'high-performance',
     })
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75))
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.highTier ? 2 : 1.75))
     this.renderer.toneMapping = THREE.AgXToneMapping
     this.renderer.toneMappingExposure = 0.7
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.shadowMap.enabled = true
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    this.renderer.shadowMap.type = THREE.PCFShadowMap
     this.renderer.info.autoReset = false
 
     const draco = new DRACOLoader()
@@ -176,6 +188,9 @@ export class ShangyuanScene {
     this.composer.addPass(new OutputPass())
     this.grading = new ShaderPass(gradingShader())
     this.composer.addPass(this.grading)
+    // The composer draws through an offscreen target, so the canvas MSAA flag
+    // never sees geometry edges.  SMAA cleans up the final graded image.
+    if (this.highTier) this.composer.addPass(new SMAAPass())
 
     this.addEnvironment()
     this.addSky()
@@ -473,7 +488,10 @@ export class ShangyuanScene {
     moon.position.set(-90, 130, 70)
     moon.target.position.set(0, 0, -20)
     moon.castShadow = true
-    moon.shadow.mapSize.set(2048, 2048)
+    // The shadow map is frozen after the world loads, so the higher resolution
+    // costs nothing per frame and doubles the shadow detail across the street.
+    const shadowSize = this.highTier ? 4096 : 2048
+    moon.shadow.mapSize.set(shadowSize, shadowSize)
     moon.shadow.camera.left = -140
     moon.shadow.camera.right = 140
     moon.shadow.camera.top = 140
