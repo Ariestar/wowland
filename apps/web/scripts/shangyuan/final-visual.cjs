@@ -25,6 +25,41 @@ function clickView(page, name) {
   }, name)
 }
 
+async function measureOfficialVisibility(page) {
+  return page.evaluate(() => {
+    const app = window.__shangyuan
+    const camera = app?.camera
+    const group = app?.publicScenery?.object
+    if (!camera || !group) return null
+    camera.updateMatrixWorld()
+    const visible = { sakura: 0, willow: 0, bamboo: 0, pavilions: 0, corridors: 0 }
+    group.traverse((object) => {
+      if (!object.isMesh || !object.name.startsWith('AwcScenery_')) return
+      const kind = object.name.slice('AwcScenery_'.length)
+      if (!(kind in visible)) return
+      const geometry = object.geometry
+      if (!geometry.boundingSphere) geometry.computeBoundingSphere()
+      const sphere = geometry.boundingSphere
+      if (!sphere) return
+      const Matrix4 = object.matrixWorld.constructor
+      const count = object.isInstancedMesh ? object.count : 1
+      for (let i = 0; i < count; i++) {
+        const world = object.matrixWorld.clone()
+        if (object.isInstancedMesh) {
+          const instance = new Matrix4()
+          object.getMatrixAt(i, instance)
+          world.multiply(instance)
+        }
+        const ndc = sphere.center.clone().applyMatrix4(world).project(camera)
+        if (ndc.z >= -1 && ndc.z <= 1 && Math.abs(ndc.x) <= 1.05 && Math.abs(ndc.y) <= 1.05) {
+          visible[kind]++
+        }
+      }
+    })
+    return visible
+  })
+}
+
 async function analyseScreenshot(page, buffer) {
   return page.evaluate(async (base64) => {
     const img = new Image()
@@ -67,6 +102,10 @@ async function analyseScreenshot(page, buffer) {
     const url = response.url()
     if (url.includes('blossom_petal.jpg')) assetResponses.petal = response.status()
     if (url.includes('SM_Prop_Lantern_Hung_01.glb')) assetResponses.kitLantern = response.status()
+    for (const name of ['sakura-tree', 'willow', 'bamboo', 'wood-pavilion', 'crossing-corridor']) {
+      if (url.includes(`/library/${name}.glb`)) assetResponses[name] = response.status()
+    }
+    if (url.includes('basis_transcoder')) assetResponses.basis = response.status()
   })
 
   await openScene(page, 1200)
@@ -94,6 +133,7 @@ async function analyseScreenshot(page, buffer) {
       viewButtonFound: found,
       pixels,
       stats,
+      officialVisibility: await measureOfficialVisibility(page),
       fps: await measureFps(page, 1200),
     })
   }
@@ -115,6 +155,36 @@ async function analyseScreenshot(page, buffer) {
     canvasSized: canvas.css[0] >= 1440 && canvas.css[1] >= 900,
     canvasFillsViewport: canvas.viewportFill >= 0.85,
     assetsLoaded: assetResponses.petal === 200 && assetResponses.kitLantern === 200,
+    officialSceneryLoaded: [
+      'sakura-tree',
+      'willow',
+      'bamboo',
+      'wood-pavilion',
+      'crossing-corridor',
+    ].every((name) => assetResponses[name] === 200),
+    basisTranscoderLoaded: assetResponses.basis === 200,
+    publicSceneryInStats: samples.every((s) => {
+      const scenery = s.stats.publicScenery
+      return (
+        scenery &&
+        scenery.sakura >= 4 &&
+        scenery.willow >= 3 &&
+        scenery.bamboo >= 8 &&
+        scenery.pavilions >= 1 &&
+        scenery.corridors >= 3
+      )
+    }),
+    officialSceneryVisible: samples.some((s) => {
+      const visible = s.officialVisibility
+      return (
+        visible &&
+        visible.sakura > 0 &&
+        visible.willow > 0 &&
+        visible.bamboo > 0 &&
+        visible.pavilions > 0 &&
+        visible.corridors > 0
+      )
+    }),
     detailInStats: samples.every(
       (s) => s.stats.ambientPetals > 0 && s.stats.entranceKitLanterns >= 4,
     ),
