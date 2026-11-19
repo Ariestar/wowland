@@ -27,7 +27,7 @@ export class Ripple implements Effect {
 
   update(dt: number) {
     this.age += dt
-    const s = 1 + this.age * 3.4
+    const s = 1 + this.age * 1.8
     this.mesh.scale.setScalar(s)
     ;(this.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(
       0,

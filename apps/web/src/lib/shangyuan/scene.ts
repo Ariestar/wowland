@@ -9,13 +9,17 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShangyuanAudio } from './audio'
+import { CatPrototype } from './cat'
 import { type CollisionLayout, ObstacleField, WalkableGround } from './collision'
 import {
   BLESSINGS,
+  CAT_ZONE,
+  COPY,
   INTERACTABLES,
   type InteractableId,
   LANTERN_STYLES,
-  RIDDLES,
+  RELEASE,
+  RIDDLE,
   SCENE,
   VIEWPOINTS,
 } from './data'
@@ -23,7 +27,7 @@ import { type Effect, Ripple, RiverAtmosphere } from './effects'
 import { FireworkShell, FireworkSystem, IronFlower, type ShellKind } from './fireworks'
 import { WaterlineFlora } from './flora'
 import { gradingShader, sanitizeShader } from './postFx'
-import type { Panel, Phase, SceneCallbacks } from './types'
+import type { Panel, Phase, Prompt, SceneCallbacks } from './types'
 import { batTexture, createWaterMaterial, glowTexture, skyLanternTexture } from './water'
 
 const MODEL_BASE = '/models/lantern-river/'
@@ -82,7 +86,20 @@ type LanternRecord = {
   z: number
   yaw: number
   scale: number
+  /** A player-released lantern: slides in, glows, then fades and recycles. */
+  owner: boolean
+  /** Wall-clock birth (performance.now), so lifetime survives FPS dips. */
+  born: number
+  /** Shore-side x the owner lantern slides in from. */
+  shoreX: number
 }
+
+/** Constants for the owner-lantern slide-in (PRD §7.4: 0.3–1.5 s). */
+const SLIDE_TIME = 1.1
+const SHORE_X = 13.0
+const WATER_X = 11.2
+/** Quay release point in Blender coords (x, y); the lantern enters here. */
+const RELEASE_SPOT = { x: 13.5, y: -86.4 }
 
 export class ShangyuanScene {
   private readonly canvas: HTMLCanvasElement
@@ -120,10 +137,18 @@ export class ShangyuanScene {
     drifts: Float32Array
   } | null = null
   private towerGlowMaterial: THREE.PointsMaterial | null = null
+  private claimLanternMat: THREE.MeshStandardMaterial | null = null
+  private markerLanternMat: THREE.MeshStandardMaterial | null = null
+  private claimAnim = -1
+  /** Floating blessing text above each fresh lantern (PRD §7.4). */
+  private blessings: { sprite: THREE.Sprite; born: number }[] = []
   private readonly wheelPivots: THREE.Object3D[] = []
   private readonly lanternBatches = new Map<string, LanternBatch>()
   private lanternHalo: THREE.Points | null = null
   private readonly lanternHaloPositions = new Float32Array(70 * 3)
+  /** Extra bright halo over fresh player lanterns (PRD §7.4 identification). */
+  private ownerGlow: THREE.Points | null = null
+  private readonly ownerGlowPositions = new Float32Array(5 * 3)
   private readonly lanternMatrix = new THREE.Matrix4()
   private readonly lanternPartMatrix = new THREE.Matrix4()
   private readonly lanternQuat = new THREE.Quaternion()
@@ -148,12 +173,25 @@ export class ShangyuanScene {
   private pointerLocked = false
 
   private phase: Phase = 'idle'
-  private wicks = 0
-  private riddleIndex = 0
-  private riddlesSolved = 0
+  private claimed = false
+  private riddleSolved = false
+  private released = false
+  private releaseCount = 0
+  /** Wall-clock timestamp; releases are allowed again after it (PRD §7.5). */
+  private cooldownUntil = 0
+  private cooldownShown = 0
+  private releasing = false
+  private draftStyle = 0
+  private draftBlessing = 0
+  private showStarted = false
+  private releaseAnim: {
+    t: number
+    styleIdx: number
+    blessing: string
+    spawned: boolean
+  } | null = null
   private style = ''
   private blessing = ''
-  private released = 0
   private showClock = -1
   private showStage = 0
   private autoShow = -1
@@ -177,6 +215,19 @@ export class ShangyuanScene {
   private idleClock = 0
   private touchMove = 0
   private touchStrafe = 0
+
+  // --- G0 cat prototype (PRD §8): placeholder geometry, isolated state.
+  private cat: CatPrototype | null = null
+  private catMode = false
+  private catEnterT = 1
+  private catCompleted = false
+  private catSaved: {
+    pos: THREE.Vector3
+    yaw: number
+    pitch: number
+    ground: number
+  } | null = null
+  private catActionLabel = ''
 
   constructor(canvas: HTMLCanvasElement, callbacks: SceneCallbacks) {
     this.canvas = canvas
@@ -206,6 +257,28 @@ export class ShangyuanScene {
     this.skyGlow = skyLanternTexture()
     this.fireworks = new FireworkSystem(this.glow)
     this.scene.add(this.fireworks.object)
+    // Five bright discs over the freshest player lanterns.
+    const ownerGlowGeo = new THREE.BufferGeometry()
+    const ownerGlowAttr = new THREE.BufferAttribute(this.ownerGlowPositions, 3)
+    ownerGlowAttr.setUsage(THREE.DynamicDrawUsage)
+    ownerGlowGeo.setAttribute('position', ownerGlowAttr)
+    ownerGlowGeo.setDrawRange(0, 0)
+    this.ownerGlow = new THREE.Points(
+      ownerGlowGeo,
+      new THREE.PointsMaterial({
+        map: this.glow,
+        color: 0xffd9a0,
+        transparent: true,
+        opacity: 0.45,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        size: this.spriteSize(0.5),
+        sizeAttenuation: true,
+      }),
+    )
+    this.ownerGlow.frustumCulled = false
+    this.ownerGlow.userData.noGtao = true
+    this.scene.add(this.ownerGlow)
     this.waterMat = createWaterMaterial(reflectionBudget() ? 0.8 : 0.96)
     this.water = new THREE.Mesh(new THREE.PlaneGeometry(36, 380, 48, 320), this.waterMat)
     this.water.rotation.x = -Math.PI / 2
@@ -642,6 +715,9 @@ export class ShangyuanScene {
 
   private onPointerDown = (e: PointerEvent) => {
     this.audio.unlock()
+    // Photo mode accepts no scene input (PRD §7.6); the tap itself is the
+    // mobile exit, handled by the component, and must not grab the pointer.
+    if (this.photo) return
     if (e.pointerType === 'mouse' && !this.pointerLocked) {
       void this.canvas.requestPointerLock?.()
       return
@@ -681,7 +757,8 @@ export class ShangyuanScene {
       return
     }
     if (e.code === 'Escape') {
-      this.closePanel()
+      if (this.catMode) this.exitCat()
+      else this.closePanel()
       return
     }
     if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ShiftLeft', 'ShiftRight'].includes(e.code)) {
@@ -718,7 +795,7 @@ export class ShangyuanScene {
   // ---------------------------------------------------------------- loading
 
   async load() {
-    const total = 9
+    const total = 6
     let done = 0
     const tick = () => {
       done++
@@ -816,10 +893,71 @@ export class ShangyuanScene {
     await Promise.all([layoutJob, worldJob, ...templateJobs])
     this.addGroundGlow()
     this.seedAmbientLanterns()
+    this.buildCat()
+    this.buildMvpProps()
+    tick()
     this.pushHud()
     this.worldReady = true
     this.cb.onReady()
     this.loop()
+  }
+
+  /**
+   * Placeholder props for the MVP fragment (G0/G1): the claimable paper
+   * lantern at the paifang, the stall marker lamp, and the faint release
+   * marker at the quay.  Real assets replace these per A03/A06/A09.
+   */
+  private buildMvpProps() {
+    const paper = (opacity: number) =>
+      new THREE.MeshStandardMaterial({
+        color: 0xf6e6c8,
+        roughness: 0.7,
+        emissive: new THREE.Color(0xffb45e),
+        emissiveIntensity: opacity,
+        transparent: true,
+        opacity: 0.94,
+      })
+
+    // A03 claim lantern: unlit until the player claims it (PRD §5.1).
+    const claimMat = paper(0.06)
+    this.claimLanternMat = claimMat
+    const lanternGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.34, 10)
+    const claimLantern = new THREE.Mesh(lanternGeo, claimMat)
+    claimLantern.position.set(15.6, SCENE.groundZ + 1.05, 122.4)
+    claimLantern.castShadow = true
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.045, 0.055, 1.6, 8),
+      new THREE.MeshStandardMaterial({ color: 0x4a3826, roughness: 0.9 }),
+    )
+    pole.position.set(15.6, SCENE.groundZ + 0.8, 122.55)
+    pole.castShadow = true
+    this.scene.add(claimLantern, pole)
+
+    // A06 riddle marker lamp: dim until the riddle is solved (PRD §6.1).
+    const markerMat = paper(0.08)
+    this.markerLanternMat = markerMat
+    const marker = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), markerMat)
+    marker.position.set(16.0, SCENE.groundZ + 0.85, 106.0)
+    const markerPole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.035, 0.045, 0.9, 8),
+      new THREE.MeshStandardMaterial({ color: 0x4a3826, roughness: 0.9 }),
+    )
+    markerPole.position.set(16.0, SCENE.groundZ + 0.45, 106.0)
+    this.scene.add(marker, markerPole)
+
+    // A09 release marker: a faint ground decal at the safe stand (PRD §7.1).
+    const decalMat = new THREE.MeshBasicMaterial({
+      map: this.glow,
+      color: 0xffc477,
+      transparent: true,
+      opacity: 0.2,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    })
+    const decal = new THREE.Mesh(new THREE.CircleGeometry(0.8, 24), decalMat)
+    decal.rotation.x = -Math.PI / 2
+    decal.position.set(RELEASE_SPOT.x, SCENE.groundZ + 0.04, -RELEASE_SPOT.y)
+    this.scene.add(decal)
   }
 
   /**
@@ -1221,7 +1359,14 @@ export class ShangyuanScene {
     }
   }
 
-  private spawnLantern(style: string, x: number, z: number, speed: number, ripple = false) {
+  private spawnLantern(
+    style: string,
+    x: number,
+    z: number,
+    speed: number,
+    ripple = false,
+    owner = false,
+  ) {
     const batch = this.lanternBatches.get(style)
     if (!batch) return
     this.lanterns.push({
@@ -1235,57 +1380,85 @@ export class ShangyuanScene {
       z,
       yaw: 0,
       scale: 0.9 + Math.random() * 0.35,
+      owner,
+      born: performance.now(),
+      shoreX: SHORE_X,
     })
     if (ripple) this.effects.push(new Ripple(this.scene, new THREE.Vector3(x, 0, z)))
-    if (this.lanterns.length > 70) this.lanterns.shift()
+    if (this.lanterns.length > 70) {
+      // Drop the oldest environment lantern; player lanterns stay capped by
+      // their own release limit, so never evict those.
+      const index = this.lanterns.findIndex((l) => !l.owner)
+      if (index >= 0) this.lanterns.splice(index, 1)
+    }
   }
 
   // ---------------------------------------------------------------- interaction
 
   interact() {
+    if (this.photo) return
+    if (this.catMode) {
+      this.catAction()
+      return
+    }
     if (this.panel) return
     const id = this.nearby
     if (!id) return
     this.audio.unlock()
     switch (id) {
       case 'entrance':
-        if (this.phase !== 'idle') {
-          this.cb.onToast('花灯已经在你手里了')
+        if (this.claimed) {
+          this.cb.onToast(COPY.claimedAgain)
           return
         }
         this.openPanel({
+          kind: 'claim',
           title: '灯门',
-          body: '守灯人递来一盏素纸花灯。「提着它，去街市里换一枚灯芯。」',
-          options: [{ label: '提起花灯' }],
+          body: '守灯人递来一盏素纸花灯。「提着它，去灯谜摊猜一道谜。」',
+          options: [{ label: COPY.C02 }],
         })
         return
       case 'riddle':
-        if (this.phase === 'idle') {
-          this.cb.onToast('先去牌坊领一盏花灯')
+        if (!this.claimed) {
+          this.cb.onToast(COPY.riddleLocked)
           return
         }
-        if (this.riddlesSolved >= RIDDLES.length) {
-          this.cb.onToast('三枚灯谜都答对了，灯芯已经够了')
+        if (this.riddleSolved) {
+          this.cb.onToast(COPY.riddleDone)
           return
         }
-        this.openRiddle()
-        return
-      case 'tower':
-        if (this.phase === 'idle') {
-          this.cb.onToast('先去牌坊领一盏花灯')
-          return
-        }
-        this.openStyles()
+        this.openPanel({
+          kind: 'riddle',
+          title: '灯谜 · 一谜一灯',
+          body: RIDDLE.question,
+          options: RIDDLE.options.map((label) => ({ label })),
+        })
         return
       case 'quay':
-        if (!this.style) {
-          this.cb.onToast('先去灯楼挑一盏河灯')
+        if (!this.riddleSolved) {
+          this.cb.onToast(COPY.quayLocked)
           return
         }
-        this.openBlessings()
+        if (this.releasing) {
+          this.cb.onToast(COPY.releaseBusy)
+          return
+        }
+        if (this.cooldownSeconds() > 0) {
+          this.cb.onToast(COPY.C14(Math.ceil(this.cooldownSeconds())))
+          return
+        }
+        if (this.activeOwnerCount() >= RELEASE.maxActive) {
+          this.cb.onToast(COPY.C13)
+          return
+        }
+        this.openReleasePanel()
         return
-      case 'performance':
-        this.openShow()
+      case 'catMask':
+        if (!this.claimed) {
+          this.cb.onToast(COPY.C16)
+          return
+        }
+        this.enterCat()
         return
     }
   }
@@ -1295,41 +1468,68 @@ export class ShangyuanScene {
     this.cb.onPanel(panel)
   }
 
-  private openRiddle() {
-    const r = RIDDLES[this.riddleIndex]
+  private openReleasePanel() {
     this.openPanel({
-      title: `灯谜 ${this.riddleIndex + 1} / ${RIDDLES.length}`,
-      body: r.question,
-      options: r.options.map((label) => ({ label })),
+      kind: 'release',
+      title: '埠头 · 选一盏灯，留一句愿',
+      body: '挑一盏河灯，留一句祝词，然后把它放进河里。',
+      options: LANTERN_STYLES.map((s) => ({ label: s.name, note: s.meaning })),
+      selectedStyle: this.draftStyle,
+      selectedBlessing: this.draftBlessing,
+      confirmLabel: COPY.C10,
     })
   }
 
-  private openStyles() {
-    this.openPanel({
-      title: '上元灯楼 · 挑一盏河灯',
-      body: `灯芯 ${this.wicks} 枚。灯芯越多，能挑的灯越精巧。`,
-      options: LANTERN_STYLES.map((s) => ({
-        label: s.name,
-        note: s.cost === 0 ? s.note : `${s.note} · 需 ${s.cost} 枚灯芯`,
-        disabled: this.wicks < s.cost,
-      })),
-    })
+  selectStyle(index: number) {
+    if (this.panel?.kind !== 'release') return
+    if (index < 0 || index >= LANTERN_STYLES.length) return
+    this.draftStyle = index
+    this.audio.chime(720)
+    this.panel = { ...this.panel, selectedStyle: index }
+    this.cb.onPanel(this.panel)
   }
 
-  private openBlessings() {
-    this.openPanel({
-      title: '埠头 · 写一句祝词',
-      body: `你手里的${this.style}已经点好了。选一句祝词，把它放进水里。`,
-      options: BLESSINGS.map((label) => ({ label })),
-    })
+  selectBlessing(index: number) {
+    if (this.panel?.kind !== 'release') return
+    if (index < 0 || index >= BLESSINGS.length) return
+    this.draftBlessing = index
+    this.audio.chime(760)
+    this.panel = { ...this.panel, selectedBlessing: index }
+    this.cb.onPanel(this.panel)
   }
 
-  private openShow() {
-    this.openPanel({
-      title: '河对岸 · 花台',
-      body: '铁水已经烧到发白。要不要现在就看一场打铁花？',
-      options: [{ label: '看一场' }],
-    })
+  /** PRD §7.4: guards, then the slide-in plays out in update(). */
+  confirmRelease() {
+    if (this.panel?.kind !== 'release') return
+    if (this.releasing) {
+      this.cb.onToast(COPY.releaseBusy)
+      return
+    }
+    if (this.cooldownSeconds() > 0) {
+      this.cb.onToast(COPY.C14(Math.ceil(this.cooldownSeconds())))
+      return
+    }
+    if (this.activeOwnerCount() >= RELEASE.maxActive) {
+      this.cb.onToast(COPY.C13)
+      return
+    }
+    // The player must still stand in the safe range.
+    const quay = INTERACTABLES.find((i) => i.id === 'quay')
+    if (
+      !quay ||
+      Math.hypot(this.player.x - quay.pos[0], -this.player.z - quay.pos[1]) > quay.radius + 0.6
+    ) {
+      this.cb.onToast('请站回埠头的放灯位置。')
+      return
+    }
+    const style = LANTERN_STYLES[this.draftStyle]
+    const blessing = BLESSINGS[this.draftBlessing]
+    this.style = style.name
+    this.blessing = blessing
+    this.releasing = true
+    this.closePanel()
+    this.releaseAnim = { t: 0, styleIdx: this.draftStyle, blessing, spawned: false }
+    this.pushHud()
   }
 
   choose(index: number) {
@@ -1338,84 +1538,80 @@ export class ShangyuanScene {
     const option = panel.options[index]
     if (!option || option.disabled) return
 
-    if (panel.title === '灯门') {
-      this.phase = 'claimed'
-      this.cb.onToast('花灯亮了。去街市里猜灯谜，换一枚灯芯。')
+    if (panel.kind === 'claim') {
+      this.claimed = true
+      this.claimAnim = 0
       this.audio.chime(660)
+      this.cb.onToast(COPY.C03)
       this.closePanel()
       this.pushHud()
       return
     }
 
-    if (panel.title.startsWith('灯谜')) {
-      const riddle = RIDDLES[this.riddleIndex]
-      if (index === riddle.answer) {
-        this.wicks++
-        this.riddlesSolved++
-        this.riddleIndex++
+    if (panel.kind === 'riddle') {
+      if (index === RIDDLE.answer) {
+        this.riddleSolved = true
         this.audio.chime(880)
-        this.cb.onToast(`答对了 · 灯芯 +1（${this.wicks} 枚）`)
+        this.cb.onToast(COPY.C07)
         this.closePanel()
         this.pushHud()
       } else {
-        this.panel = { ...panel, hint: riddle.hint }
+        this.panel = { ...panel, hint: COPY.C06 }
         this.cb.onPanel(this.panel)
         this.audio.thud()
       }
       return
     }
 
-    if (panel.title.includes('挑一盏河灯')) {
-      const style = LANTERN_STYLES[index]
-      if (this.wicks < style.cost) return
-      this.wicks -= style.cost
-      this.style = style.name
-      this.phase = 'style'
-      this.audio.chime(1040)
-      this.cb.onToast(`拿到了${style.name}。去埠头把它放进河里。`)
-      this.closePanel()
-      this.pushHud()
+    if (panel.kind === 'release') {
+      // Compatibility path: the component drives selection directly.
+      if (index < LANTERN_STYLES.length) this.selectStyle(index)
+      else this.selectBlessing(index - LANTERN_STYLES.length)
       return
     }
 
-    if (panel.title.includes('写一句祝词')) {
-      this.blessing = BLESSINGS[index]
-      this.releaseLantern()
-      this.closePanel()
-      return
-    }
-
-    if (panel.title.includes('花台')) {
-      this.closePanel()
-      this.startShow()
-    }
+    this.closePanel()
   }
 
-  private releaseLantern() {
-    const style = LANTERN_STYLES.find((s) => s.name === this.style)
+  private activeOwnerCount(): number {
+    return this.lanterns.reduce(
+      (n, l) => (l.owner && this.ownerAge(l) < RELEASE.lifetime ? n + 1 : n),
+      0,
+    )
+  }
+
+  /** Seconds left before another release is allowed (wall clock). */
+  private cooldownSeconds(): number {
+    return Math.max(0, (this.cooldownUntil - performance.now()) / 1000)
+  }
+
+  /** Owner-lantern age in seconds, tracked on the wall clock. */
+  private ownerAge(l: LanternRecord): number {
+    return (performance.now() - l.born) / 1000
+  }
+
+  private spawnOwnerLantern(styleIdx: number) {
+    const style = LANTERN_STYLES[styleIdx]
     const id = style?.file ?? 'model-river-lantern-lotus'
+    const z = -RELEASE_SPOT.y
     this.spawnLantern(
       id,
-      this.riverHalf - 1.4 - Math.random() * 1.2,
-      -118,
-      0.42 + Math.random() * 0.16,
+      WATER_X,
+      z,
+      RELEASE.speedMin + Math.random() * (RELEASE.speedMax - RELEASE.speedMin),
+      true,
       true,
     )
-    this.released++
-    this.phase = 'released'
-    this.audio.splash()
-    this.cb.onToast(`河灯落水了 ·「${this.blessing}」`)
-    this.pushHud()
-    if (this.autoShow < 0 && this.showClock < 0) this.autoShow = 4.5
   }
 
   private startShow() {
-    this.phase = 'show'
+    if (this.showStarted) return
+    this.showStarted = true
     this.showClock = 0
     this.showStage = 0
     this.autoShow = -1
     this.pushHud()
-    this.cb.onToast('灯楼要亮了')
+    this.cb.onToast('灯会开始了，抬头看看')
   }
 
   closePanel() {
@@ -1427,13 +1623,99 @@ export class ShangyuanScene {
   private pushHud() {
     this.cb.onHud({
       phase: this.phase,
-      wicks: this.wicks,
-      riddles: this.riddlesSolved,
+      claimed: this.claimed,
+      riddleSolved: this.riddleSolved,
       released: this.released,
+      releasedCount: this.releaseCount,
+      activeLanterns: this.activeOwnerCount(),
+      cooldown: Math.ceil(this.cooldownSeconds()),
       style: this.style,
       blessing: this.blessing,
       showActive: this.showStage > 0 && this.showStage < 5,
+      cat: {
+        active: this.catMode,
+        basketTipped: this.cat?.tipped ?? false,
+        onShed: this.cat?.landed ?? false,
+        completed: this.catCompleted,
+        action: this.catActionLabel,
+      },
     })
+  }
+
+  // ---------------------------------------------------------------- cat mode
+
+  enterCat() {
+    if (this.catMode || !this.cat) return
+    if (this.panel || this.releasing) return
+    this.catSaved = {
+      pos: this.player.clone(),
+      yaw: this.yaw,
+      pitch: this.pitch,
+      ground: this.playerGround,
+    }
+    this.catMode = true
+    this.catEnterT = 0
+    this.cat.reset()
+    this.viewTween = null
+    this.pan = null
+    this.cb.onToast(COPY.C17)
+    this.pushHud()
+  }
+
+  exitCat() {
+    if (!this.catMode) return
+    this.catMode = false
+    this.catEnterT = 1
+    const saved = this.catSaved
+    if (saved) {
+      this.player.copy(saved.pos)
+      this.playerGround = saved.ground
+      this.yaw = saved.yaw
+      this.pitch = saved.pitch
+      this.camera.position.copy(this.player)
+    }
+    this.catSaved = null
+    this.setTouch(0, 0)
+    this.keys.clear()
+    this.cb.onToast('回到人形，进度保留。')
+    this.pushHud()
+  }
+
+  /** Reset the current attempt: basket upright, cat back to the mat. */
+  resetCatAttempt() {
+    if (!this.catMode || !this.cat) return
+    this.cat.reset()
+    this.pushHud()
+  }
+
+  catAction() {
+    if (!this.catMode || !this.cat) return
+    this.audio.unlock()
+    this.cat.act()
+  }
+
+  private onCatActionChange(action: string) {
+    this.catActionLabel = action
+    this.pushHud()
+  }
+
+  private buildCat() {
+    this.cat = new CatPrototype(CAT_ZONE, SCENE.groundZ, {
+      onBasketTipped: () => {
+        this.audio.thud()
+        this.cb.onToast(COPY.C19)
+        this.pushHud()
+      },
+      onShedLanded: () => {
+        this.catCompleted = true
+        this.audio.chime(980)
+        this.cb.onToast(COPY.C22)
+        this.pushHud()
+      },
+      onActionChange: (action) => this.onCatActionChange(action),
+    })
+    this.cat.group.visible = false
+    this.scene.add(this.cat.group)
   }
 
   setViewpoint(index: number) {
@@ -1468,12 +1750,30 @@ export class ShangyuanScene {
       geometries: info.memory.geometries,
       textures: info.memory.textures,
       lanterns: this.lanterns.length,
+      playerLanterns: this.activeOwnerCount(),
       obstacles: this.obstacleField ? this.layout?.obstacles.length : 0,
       ground: +this.playerGround.toFixed(2),
       reflection: Boolean(this.reflectionTarget),
       phase: this.phase,
+      claimed: this.claimed,
+      riddleSolved: this.riddleSolved,
+      released: this.released,
+      releaseCount: this.releaseCount,
+      cooldown: Math.round(this.cooldownSeconds() * 10) / 10,
+      catMode: this.catMode,
+      catCompleted: this.catCompleted,
+      catTipped: this.cat?.tipped ?? false,
+      catOnShed: this.cat?.landed ?? false,
       showStage: this.showStage,
     }
+  }
+
+  /** PRD §4.3: restore the position without touching session progress. */
+  returnToEntrance() {
+    if (this.catMode) this.exitCat()
+    const spawn = this.layout?.spawn ?? { x: 16.21, y: -132 }
+    this.teleport(spawn.x, spawn.y)
+    this.cb.onToast(COPY.C24)
   }
 
   /** Debug helper: first meshes under a screen point (NDC). */
@@ -1501,6 +1801,14 @@ export class ShangyuanScene {
 
   /** Debug helper: face a Blender (x, y) point from the current spot. */
   lookAt(x: number, y: number, height = 1.6) {
+    if (this.catMode && this.cat) {
+      // Steer the cat instead of the parked human camera.
+      const p = this.cat.position
+      const dx = x - p.x
+      const dz = -y - p.z
+      this.cat.face(Math.atan2(dz, dx))
+      return
+    }
     const dx = x - this.player.x
     const dz = -y - this.player.z
     const dy = height - this.player.y
@@ -1523,6 +1831,11 @@ export class ShangyuanScene {
 
   togglePhoto(): boolean {
     this.photo = !this.photo
+    if (this.photo && document.pointerLockElement) {
+      // Framing mode needs the cursor for the exit tap (PRD §7.6).
+      document.exitPointerLock?.()
+      this.pointerLocked = false
+    }
     return this.photo
   }
 
@@ -1562,22 +1875,26 @@ export class ShangyuanScene {
   }
 
   private update(dt: number, eventDt = dt) {
-    if (this.viewTween) {
-      this.updateViewTween(dt)
+    if (this.catMode && this.cat) {
+      this.updateCatFrame(dt)
     } else {
-      this.move(dt)
-      this.updatePan(dt)
-      // Steps and the bridge ramp change the ground height under the feet; ease
-      // the eye to it so crossings read as a walk instead of a lift.
-      this.player.y += (this.playerGround + EYE - this.player.y) * Math.min(1, dt * 12)
+      if (this.viewTween) {
+        this.updateViewTween(dt)
+      } else {
+        this.move(dt)
+        this.updatePan(dt)
+        // Steps and the bridge ramp change the ground height under the feet; ease
+        // the eye to it so crossings read as a walk instead of a lift.
+        this.player.y += (this.playerGround + EYE - this.player.y) * Math.min(1, dt * 12)
+      }
+      this.camera.position.copy(this.player)
+      const dir = new THREE.Vector3(
+        Math.cos(this.pitch) * Math.cos(this.yaw),
+        Math.sin(this.pitch),
+        Math.cos(this.pitch) * Math.sin(this.yaw),
+      )
+      this.camera.lookAt(this.player.clone().add(dir))
     }
-    this.camera.position.copy(this.player)
-    const dir = new THREE.Vector3(
-      Math.cos(this.pitch) * Math.cos(this.yaw),
-      Math.sin(this.pitch),
-      Math.cos(this.pitch) * Math.sin(this.yaw),
-    )
-    this.camera.lookAt(this.player.clone().add(dir))
 
     this.waterMat.uniforms.uTime.value += dt
     this.atmosphere.update(dt, this.camera)
@@ -1593,6 +1910,146 @@ export class ShangyuanScene {
     this.updateAmbientFireworks(dt)
     this.updateEffects(dt)
     this.updateNearby()
+    this.updateRelease(eventDt)
+    this.updateProps(dt)
+  }
+
+  /** Lamp state ramps: the claim lantern lights over ~1 s (PRD §5.2). */
+  private updateProps(dt: number) {
+    if (this.claimAnim >= 0 && this.claimAnim < 1.1) {
+      this.claimAnim += dt
+      const t = Math.min(1, this.claimAnim / 1.0)
+      if (this.claimLanternMat) this.claimLanternMat.emissiveIntensity = 0.06 + t * 1.7
+    }
+    if (
+      this.riddleSolved &&
+      this.markerLanternMat &&
+      this.markerLanternMat.emissiveIntensity < 1.5
+    ) {
+      this.markerLanternMat.emissiveIntensity = Math.min(
+        1.5,
+        this.markerLanternMat.emissiveIntensity + dt * 1.5,
+      )
+    }
+    // Blessing text rises a little and fades after ~3.2 s.
+    for (let i = this.blessings.length - 1; i >= 0; i--) {
+      const b = this.blessings[i]
+      const age = (performance.now() - b.born) / 1000
+      b.sprite.position.y += dt * 0.18
+      const mat = b.sprite.material as THREE.SpriteMaterial
+      mat.opacity = Math.max(0, 1 - age / 3.2) * 0.95
+      if (age > 3.2) {
+        this.scene.remove(b.sprite)
+        mat.map?.dispose()
+        mat.dispose()
+        this.blessings.splice(i, 1)
+      }
+    }
+  }
+
+  /** Draw the blessing on a canvas sprite and float it over a new lantern. */
+  private spawnBlessing(text: string, x: number, z: number) {
+    const canvas = document.createElement('canvas')
+    canvas.width = 512
+    canvas.height = 128
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.font = '52px "SJR Display", serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillStyle = 'rgba(255, 224, 176, 0.96)'
+    ctx.shadowColor = 'rgba(255, 170, 90, 0.9)'
+    ctx.shadowBlur = 18
+    ctx.fillText(text, 256, 64)
+    const texture = new THREE.CanvasTexture(canvas)
+    texture.colorSpace = THREE.SRGBColorSpace
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: texture,
+        transparent: true,
+        depthWrite: false,
+        opacity: 0.95,
+      }),
+    )
+    sprite.position.set(x, 0.85, z)
+    sprite.scale.set(1.5, 0.375, 1)
+    sprite.userData.noGtao = true
+    this.scene.add(sprite)
+    this.blessings.push({ sprite, born: performance.now() })
+  }
+
+  /** Cat-mode frame: drive the prototype, follow it with a third-person camera. */
+  private updateCatFrame(dt: number) {
+    if (!this.cat) return
+    const f = (this.keys.has('KeyW') ? 1 : 0) - (this.keys.has('KeyS') ? 1 : 0)
+    const r = (this.keys.has('KeyD') ? 1 : 0) - (this.keys.has('KeyA') ? 1 : 0)
+    if (this.touchMove || this.touchStrafe) {
+      this.cat.setMove(this.touchMove, this.touchStrafe)
+    } else {
+      this.cat.setMove(this.panel ? 0 : f, this.panel ? 0 : r)
+    }
+    this.cat.update(dt)
+    this.catEnterT = Math.min(1, this.catEnterT + dt / 0.8)
+    const eased = this.catEnterT * this.catEnterT * (3 - 2 * this.catEnterT)
+
+    const target = new THREE.Vector3()
+    const angles = { yaw: 0, pitch: 0 }
+    this.cat.cameraTarget(target, angles)
+    const look = this.cat.position.clone()
+    look.y += 0.4
+    if (this.catEnterT < 1 && this.catSaved) {
+      target.lerpVectors(this.catSaved.pos, target, eased)
+    }
+    this.camera.position.copy(target)
+    this.camera.lookAt(look)
+    // The human position stays parked in catSaved so returning to human mode
+    // restores it exactly; only the camera follows the cat.
+    this.yaw = angles.yaw
+    this.pitch = angles.pitch
+  }
+
+  /** Release animation clock (PRD §7.4): 0.3 s pause, then the slide-in. */
+  private updateRelease(dt: number) {
+    // Keep the HUD countdown fresh without re-rendering every frame.
+    if (this.cooldownUntil > 0) {
+      const secs = Math.ceil(this.cooldownSeconds())
+      if (secs <= 0) {
+        this.cooldownUntil = 0
+        this.cooldownShown = 0
+        this.pushHud()
+      } else if (secs !== this.cooldownShown) {
+        this.cooldownShown = secs
+        this.pushHud()
+      }
+    }
+
+    const anim = this.releaseAnim
+    if (!anim) return
+    anim.t += dt
+    if (!anim.spawned && anim.t >= 0.3) {
+      anim.spawned = true
+      this.spawnOwnerLantern(anim.styleIdx)
+    }
+    if (anim.spawned && anim.t >= 0.3 + SLIDE_TIME) {
+      this.audio.splash()
+      this.effects.push(new Ripple(this.scene, new THREE.Vector3(WATER_X, 0, -RELEASE_SPOT.y)))
+      this.spawnBlessing(anim.blessing, WATER_X, -RELEASE_SPOT.y)
+      this.releaseCount++
+      this.cooldownUntil = performance.now() + RELEASE.cooldown * 1000
+      this.releasing = false
+      this.releaseAnim = null
+      if (!this.released) {
+        this.released = true
+        this.phase = 'released'
+        this.cb.onToast(`心愿已入河 ·「${anim.blessing}」`)
+        this.cb.onToast(COPY.C11)
+        // The first success starts the show once, 3–5 s later (PRD §7.6).
+        this.autoShow = 3.5
+      } else {
+        this.cb.onToast(`又一盏灯入了河 ·「${anim.blessing}」`)
+      }
+      this.pushHud()
+    }
   }
 
   /** A gentle, interruptible turn toward a moment worth watching (the show). */
@@ -1708,6 +2165,17 @@ export class ShangyuanScene {
   }
 
   private updateLanterns(dt: number) {
+    // Owner lanterns slide in from the shore, glow for identification, then
+    // fade and recycle after their lifetime (PRD §7.4/§7.5).  Ages use the
+    // wall clock so FPS dips cannot stretch the rules.
+    for (let i = this.lanterns.length - 1; i >= 0; i--) {
+      const l = this.lanterns[i]
+      if (!l.owner) continue
+      if (this.ownerAge(l) > RELEASE.lifetime) {
+        this.lanterns.splice(i, 1)
+      }
+    }
+
     const xs = this.waterMat.uniforms.uLanternX.value as Float32Array
     const zs = this.waterMat.uniforms.uLanternZ.value as Float32Array
     const is = this.waterMat.uniforms.uLanternI.value as Float32Array
@@ -1715,6 +2183,7 @@ export class ShangyuanScene {
     zs.fill(0)
     is.fill(0)
     for (const batch of this.lanternBatches.values()) batch.active = 0
+    let ownerGlowCount = 0
     for (let i = 0; i < this.lanterns.length; i++) {
       const l = this.lanterns[i]
       l.t += dt
@@ -1725,6 +2194,17 @@ export class ShangyuanScene {
       if (l.z > 182) {
         l.z = -140
         l.t = Math.random() * 6
+      }
+      if (l.owner) {
+        const age = this.ownerAge(l)
+        // Slide from the quay edge onto the water during the first second.
+        const slide = Math.min(1, age / SLIDE_TIME)
+        const eased = slide * slide * (3 - 2 * slide)
+        l.x = l.shoreX + (l.lane - l.shoreX) * eased + Math.sin(l.t * 0.7) * 0.55 * slide
+        l.y = 0.08 + (1 - slide) * 0.32 + Math.sin(l.t * 1.6) * 0.03 * slide
+        // Fade out over the last three seconds of the lifetime.
+        const remain = RELEASE.lifetime - age
+        if (remain < 3) l.scale = Math.max(0.02, (remain / 3) * 0.9)
       }
       const batch = l.batch
       const slot = batch.active++
@@ -1744,6 +2224,13 @@ export class ShangyuanScene {
         zs[i] = l.z
         is[i] = 0.8 + 0.2 * Math.sin(l.t * 2)
       }
+      // Fresh owner lanterns keep a brighter identification glow.
+      if (l.owner && this.ownerAge(l) < RELEASE.glowTime && ownerGlowCount < 5) {
+        this.ownerGlowPositions[ownerGlowCount * 3] = l.x
+        this.ownerGlowPositions[ownerGlowCount * 3 + 1] = 0.55
+        this.ownerGlowPositions[ownerGlowCount * 3 + 2] = l.z
+        ownerGlowCount++
+      }
     }
     for (const batch of this.lanternBatches.values()) {
       for (const mesh of batch.meshes) {
@@ -1755,6 +2242,11 @@ export class ShangyuanScene {
       const position = this.lanternHalo.geometry.getAttribute('position') as THREE.BufferAttribute
       position.needsUpdate = true
       this.lanternHalo.geometry.setDrawRange(0, this.lanterns.length)
+    }
+    if (this.ownerGlow) {
+      const position = this.ownerGlow.geometry.getAttribute('position') as THREE.BufferAttribute
+      position.needsUpdate = true
+      this.ownerGlow.geometry.setDrawRange(0, ownerGlowCount)
     }
   }
 
@@ -1788,14 +2280,14 @@ export class ShangyuanScene {
     if (t > 0.25 && this.showStage === 0) {
       this.showStage = 1
       this.audio.chime(520)
-      // Frame the tower's middle, not its foot: from the quay the lantern
-      // tower is 40 m away and its crown sits above a level camera.
-      this.panTo(new THREE.Vector3(0, 11, -78), 1.8)
+      // The MVP show plays across the canal from the release quay, so the
+      // pan frames it from the fragment (PRD §7.6).
+      this.panTo(new THREE.Vector3(-14, 7, 94), 1.8)
       for (let i = 0; i < 14; i++) {
         this.spawnLantern(
           i % 3 === 0 ? 'model-river-lantern-fish' : 'model-river-lantern-lotus',
           -this.riverHalf * 0.72 + (i % 5) * this.riverHalf * 0.36,
-          -110 + i * 4.2,
+          84 + i * 4.2,
           0.3 + (i % 3) * 0.12,
         )
       }
@@ -1804,15 +2296,15 @@ export class ShangyuanScene {
     if (t > 1.2 && this.showStage === 1) {
       this.showStage = 2
       this.audio.boom(0.85)
-      this.effects.push(new IronFlower(this.scene, this.fireworks, new THREE.Vector3(15, 3.6, -88)))
+      this.effects.push(new IronFlower(this.scene, this.fireworks, new THREE.Vector3(-14, 3.6, 94)))
       this.pushHud()
     }
     if (t > 2.6 && this.showStage === 2) {
       this.showStage = 3
       this.effects.push(
         new FireworkShell(this.scene, this.fireworks, {
-          from: new THREE.Vector3(12, 2.5, -80),
-          to: new THREE.Vector3(12, 22, -80),
+          from: new THREE.Vector3(-10, 2.5, 90),
+          to: new THREE.Vector3(-10, 22, 90),
           kind: 'peony',
           color: 0xffc07a,
           radius: 20,
@@ -1831,8 +2323,8 @@ export class ShangyuanScene {
       this.showStage = 4
       this.effects.push(
         new FireworkShell(this.scene, this.fireworks, {
-          from: new THREE.Vector3(-10, 2.5, -78),
-          to: new THREE.Vector3(-10, 26, -78),
+          from: new THREE.Vector3(-12, 2.5, 92),
+          to: new THREE.Vector3(-12, 26, 92),
           kind: 'ring',
           color: 0xff8f60,
           accent: 0xffe3b4,
@@ -1845,8 +2337,8 @@ export class ShangyuanScene {
       )
       this.effects.push(
         new FireworkShell(this.scene, this.fireworks, {
-          from: new THREE.Vector3(16, 2.5, -86),
-          to: new THREE.Vector3(16, 20, -86),
+          from: new THREE.Vector3(10, 2.5, 96),
+          to: new THREE.Vector3(10, 20, 96),
           kind: 'chrysanthemum',
           color: 0xffdfae,
           radius: 18,
@@ -1865,17 +2357,15 @@ export class ShangyuanScene {
     if (t > 7.4 && this.showStage === 4) {
       this.showStage = 5
       this.cb.onToast('灯会到了最亮的时候')
-      this.effects.push(
-        new IronFlower(this.scene, this.fireworks, new THREE.Vector3(-15, 3.6, -84)),
-      )
+      this.effects.push(new IronFlower(this.scene, this.fireworks, new THREE.Vector3(-13, 3.6, 92)))
       this.pushHud()
     }
     if (t > 11.5 && this.showStage === 5) {
       this.showStage = 6
       this.effects.push(
         new FireworkShell(this.scene, this.fireworks, {
-          from: new THREE.Vector3(-8, 2.5, -76),
-          to: new THREE.Vector3(-8, 28, -76),
+          from: new THREE.Vector3(-8, 2.5, 90),
+          to: new THREE.Vector3(-8, 28, 90),
           kind: 'double',
           color: 0xffd8a8,
           accent: 0x9fd8ff,
@@ -1889,8 +2379,8 @@ export class ShangyuanScene {
       )
       this.effects.push(
         new FireworkShell(this.scene, this.fireworks, {
-          from: new THREE.Vector3(14, 2.5, -82),
-          to: new THREE.Vector3(14, 24, -82),
+          from: new THREE.Vector3(12, 2.5, 94),
+          to: new THREE.Vector3(12, 24, 94),
           kind: 'willow',
           color: 0xff9a5a,
           accent: 0xffe3b4,
@@ -1909,7 +2399,7 @@ export class ShangyuanScene {
     }
     if (t > 16 && this.showStage === 6) {
       this.showStage = 7
-      this.effects.push(new IronFlower(this.scene, this.fireworks, new THREE.Vector3(0, 4.8, -40)))
+      this.effects.push(new IronFlower(this.scene, this.fireworks, new THREE.Vector3(0, 4.8, 96)))
       this.audio.boom(0.7)
       this.pushHud()
     }
@@ -1991,6 +2481,10 @@ export class ShangyuanScene {
   }
 
   private updateNearby() {
+    if (this.catMode) {
+      this.updateCatNearby()
+      return
+    }
     let best: InteractableId | null = null
     let bestD = Infinity
     for (const it of INTERACTABLES) {
@@ -2002,8 +2496,51 @@ export class ShangyuanScene {
     }
     if (best !== this.nearby) {
       this.nearby = best
-      const it = INTERACTABLES.find((i) => i.id === best)
-      this.cb.onPrompt(it ? { id: it.id, label: it.label } : null)
+      this.cb.onPrompt(best ? this.promptFor(best) : null)
+    } else if (best) {
+      // State-driven labels can change without moving (cooldown, solved…).
+      this.cb.onPrompt(this.promptFor(best))
+    }
+  }
+
+  /** One label per point, reflecting the current eligibility (PRD §4.2). */
+  private promptFor(id: InteractableId): Prompt {
+    const it = INTERACTABLES.find((i) => i.id === id)
+    const label = it?.label ?? ''
+    switch (id) {
+      case 'entrance':
+        return this.claimed ? { id, label, note: '已经点亮', locked: true } : { id, label }
+      case 'riddle':
+        if (!this.claimed) return { id, label, note: COPY.riddleLocked, locked: true }
+        if (this.riddleSolved) return { id, label, note: '已经解开', locked: true }
+        return { id, label }
+      case 'quay':
+        if (!this.riddleSolved) return { id, label, note: COPY.quayLocked, locked: true }
+        if (this.releasing) return { id, label, note: COPY.releaseBusy, locked: true }
+        if (this.cooldownSeconds() > 0)
+          return { id, label, note: COPY.C14(Math.ceil(this.cooldownSeconds())), locked: true }
+        if (this.activeOwnerCount() >= RELEASE.maxActive)
+          return { id, label, note: COPY.C13, locked: true }
+        return { id, label }
+      case 'catMask':
+        if (!this.claimed) return { id, label, note: COPY.C16, locked: true }
+        if (this.catMode) return { id, label, locked: true }
+        return { id, label }
+    }
+  }
+
+  private updateCatNearby() {
+    const cat = this.cat
+    if (!cat) {
+      this.cb.onPrompt(null)
+      return
+    }
+    if (cat.landed) {
+      this.cb.onPrompt({ id: 'catMask', label: '下棚' })
+    } else if (cat.tipped) {
+      this.cb.onPrompt({ id: 'catMask', label: COPY.C21, note: COPY.C20 })
+    } else {
+      this.cb.onPrompt({ id: 'catMask', label: COPY.C18, note: COPY.C17 })
     }
   }
 
@@ -2020,6 +2557,14 @@ export class ShangyuanScene {
     this.effects.forEach((e) => {
       e.dispose(this.scene)
     })
+    this.cat?.dispose(this.scene)
+    for (const b of this.blessings) {
+      this.scene.remove(b.sprite)
+      const mat = b.sprite.material as THREE.SpriteMaterial
+      mat.map?.dispose()
+      mat.dispose()
+    }
+    this.blessings = []
     this.atmosphere.dispose(this.scene)
     this.flora?.dispose()
     this.audio.dispose()

@@ -31,7 +31,7 @@ const {
   await shot('m0-gate')
   await enter(page, 2500)
   await shot('m1-view')
-  await teleport(page, 16.4, -120, 900)
+  await teleport(page, 16.4, -123, 900)
   await shot('m2-prompt')
 
   report(OUT, errors, { fps: await measureFps(page) })

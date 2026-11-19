@@ -1,5 +1,7 @@
 /**
- * Play the full preview loop through real input: claim → riddle → pick a lantern → release → show.
+ * Play the full MVP loop through real input (PRD §14 matrix):
+ * claim → riddle (wrong then right) → release (style + blessing) →
+ * cooldown/cap checks → cat trial (pounce, jump, descend, exit).
  * Usage: node scripts/shangyuan/playtest.cjs
  * Output: test-results/shangyuan/flow-<timestamp>/
  */
@@ -29,93 +31,112 @@ const {
     await page.waitForTimeout(500)
   }
   const answer = (text) => clickText(page, text)
+  const stats = () => page.evaluate(() => window.__shangyuan.stats())
 
   await openScene(page)
   await enter(page, 1200)
 
   const fpsIdle = await measureFps(page)
 
-  // 1. entrance: claim the lantern
-  await teleport(page, 16.4, -120)
+  // 1. entrance: claim the lantern (PRD §5)
+  await teleport(page, 16.4, -123)
   await press('e')
   await shot('01-claim-panel')
-  await answer('提起花灯')
+  await answer('点亮花灯')
   await shot('02-claimed')
 
-  // 2. riddle stall: one wrong answer first to see the hint, then the full set
-  await teleport(page, 13.4, 40)
-  await page.evaluate(() => window.__shangyuan.lookAt(18.4, 40, 2.2))
-  await page.waitForTimeout(400)
+  // 2. riddle stall: wrong answer first to see the hint, then solve (PRD §6)
+  await teleport(page, 15.6, -104)
+  await page.evaluate(() => window.__shangyuan.lookAt(17.9, -103.9, 3))
   await press('e')
-  await answer('火树银花合') // wrong on purpose
-  await shot('03-riddle-hint')
-  await answer('更吹落、星如雨')
-  for (const choice of ['正月十五', '莲花']) {
-    await press('e')
-    await answer(choice)
-  }
-  await shot('04-riddles-done')
+  await shot('03-riddle-panel')
+  await answer('纸船') // wrong on purpose
+  await shot('04-riddle-hint')
+  await answer('花灯')
+  await shot('05-riddles-done')
 
-  // 3. lantern tower: pick a style
-  await teleport(page, 16.4, 78)
+  // 3. quay: pick style + blessing in one panel, confirm the release (PRD §7)
+  await teleport(page, 13.5, -86.4)
+  await page.evaluate(() => window.__shangyuan.lookAt(11.5, -86.4, 1))
   await press('e')
-  await shot('05-style-panel')
-  await answer('莲花灯')
+  await shot('06-release-panel')
+  await answer('纸船灯')
+  await answer('前程似锦')
+  await shot('07-release-selected')
+  await answer('放出这盏灯')
+  await page.waitForTimeout(2200)
+  await shot('08-released')
 
-  // 4. quay: blessing and release
-  await teleport(page, 13.4, 118)
+  // 4. release guards: cooldown blocks the quick retry, then a later release
+  // succeeds without redoing the riddle (PRD §7.5)
+  const afterFirst = await stats()
   await press('e')
-  await shot('06-blessing-panel')
-  await answer('平安顺遂')
-  await page.waitForTimeout(1200)
-  await shot('07-released')
-
-  const fpsAfterRelease = await measureFps(page)
+  await answer('放出这盏灯') // within cooldown: must be refused
+  await page.waitForTimeout(600)
+  const blockedStats = await stats()
+  await page.waitForTimeout(10500) // let the 10 s cooldown elapse
+  await press('e')
+  await answer('放出这盏灯')
+  await page.waitForTimeout(2400)
+  const afterSecond = await stats()
+  await shot('09-second-release')
 
   // 5. the show starts by itself a few seconds after the first release.
-  // Stay at the quay: the show pans the camera to the tower, so walking away
-  // would frame empty sky.
   for (const [wait, name] of [
-    [2400, '08-show-iron-flower'],
-    [2000, '09-show-fireworks'],
-    [2400, '10-show-peak'],
-    [2400, '11-show-late'],
-    [4000, '12-show-final'],
+    [2600, '10-show-iron-flower'],
+    [2400, '11-show-fireworks'],
+    [2400, '12-show-peak'],
   ]) {
     await page.waitForTimeout(wait)
     await shot(name)
   }
 
-  // 6. cross the bridge on foot from the west bank to the east bank
-  await teleport(page, -16.5, 10)
-  await page.evaluate(() => window.__shangyuan.lookAt(21, 10, 5.6))
-  await page.keyboard.down('Shift')
-  await page.keyboard.down('w')
-  const bridge = []
-  for (let i = 0; i < 12; i++) {
-    await page.waitForTimeout(700)
-    bridge.push(await page.evaluate(() => window.__shangyuan.where()))
-  }
-  await page.keyboard.up('w')
-  await page.keyboard.up('Shift')
-  await page.evaluate(() => window.__shangyuan.lookAt(0, 10, 5.6))
+  // 6. photo mode: enter, leave by tapping the canvas (mobile path) (PRD §7.6)
+  await clickText(page, '留影', 600)
+  await shot('13-photo-mode')
+  await page.mouse.click(720, 450)
   await page.waitForTimeout(500)
-  await shot('13-bridge-top')
+  await shot('14-photo-exit')
 
-  // Read the HUD header only: the body also carries Next.js dev-tool scripts.
-  const hud = await page.evaluate(() => {
-    const header = document.querySelector('header')
-    return (header?.textContent ?? '').replace(/\s+/g, ' ').trim()
-  })
-  const stats = await page.evaluate(() => window.__shangyuan.stats())
+  // 7. cat trial: mask → walk to the basket → pounce → paw print → shed → exit
+  await teleport(page, 16.2, -99.5)
+  await press('e') // enter cat mode
+  await shot('15-cat-enter')
+  // Cat spawn (17.0, -97.4) faces the basket (18.1, -95.4), ~2.3 m away.
+  await page.keyboard.down('w')
+  await page.waitForTimeout(700)
+  await page.keyboard.up('w')
+  await page.waitForTimeout(300)
+  await press('e') // pounce the basket
+  await page.waitForTimeout(900)
+  await shot('16-cat-pounce')
+  // Turn toward the paw print (18.5, -93.7) and close the gap to < 1.6 m.
+  await page.evaluate(() => window.__shangyuan.lookAt(18.5, -93.7))
+  await page.keyboard.down('w')
+  await page.waitForTimeout(350)
+  await page.keyboard.up('w')
+  await page.waitForTimeout(300)
+  await press('e') // leap to the shed
+  await page.waitForTimeout(1100)
+  await shot('17-cat-shed')
+  const catStats = await stats()
+  await press('e') // descend
+  await page.waitForTimeout(900)
+  await clickText(page, '退出狸奴试玩', 700)
+  await shot('18-cat-exit')
+
+  const fpsAfterRelease = await measureFps(page)
+  const finalStats = await stats()
 
   report(OUT, errors, {
     fpsIdle,
     fpsAfterRelease,
+    afterFirst,
+    blockedStats,
+    afterSecond,
+    catStats,
+    finalStats,
     fps: await measureFps(page),
-    stats,
-    bridge,
-    hud,
   })
   await browser.close()
 })().catch((e) => {

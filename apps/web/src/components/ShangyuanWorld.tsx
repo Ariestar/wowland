@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { VIEWPOINTS } from '@/lib/shangyuan/data'
 import { ShangyuanScene } from '@/lib/shangyuan/scene'
-import type { Panel, Phase, Prompt, SceneHud } from '@/lib/shangyuan/types'
+import type { Panel, Prompt, SceneHud } from '@/lib/shangyuan/types'
 import s from './ShangyuanWorld.module.css'
 
 type Props = { language: 'zh' | 'en' }
@@ -11,14 +11,19 @@ type Props = { language: 'zh' | 'en' }
 const COPY = {
   zh: {
     title: '上元灯夜',
-    subtitle: '提一盏灯，过一座桥，把心愿放进一条会发光的河。',
+    subtitle: '提一盏灯，猜一道谜，把心愿放进一条会发光的河。',
     enter: '进入灯会',
     enterNote: 'WASD 行走 · 鼠标转视角 · E 交互 · Esc 放开鼠标',
     loading: '灯正在一盏盏亮起',
     ready: '灯已点亮',
-    wicks: '灯芯',
-    riddles: '灯谜',
-    released: '河灯',
+    step1: '点灯',
+    step2: '解谜',
+    step3: '放灯',
+    done: '✓',
+    todo: '○',
+    wicks: '灯',
+    lanterns: '河上灯',
+    cooldown: '可再放',
     style: '手中灯',
     none: '未选',
     viewpoints: '机位',
@@ -26,23 +31,37 @@ const COPY = {
     exitPhoto: '退出留影',
     mute: '静音',
     unmute: '声音',
-    help: '回到入口',
+    back: '回到领灯点',
     ekey: 'E',
     interact: '交互',
     close: '先不看了',
     hint: '提示',
     mobile: '拖动画面转视角',
+    confirm: '放出这盏灯',
+    selected: '已选',
+    photoHint: '轻触空白处退出，使用系统截图。',
+    watermark: '桃源·上元灯会',
+    catExit: '退出狸奴试玩',
+    catReset: '回到猫垫',
+    catStep1: '扑倒竹筐',
+    catStep2: '跃上矮棚',
+    catDone: '狸奴试玩完成',
   },
   en: {
     title: 'Shangyuan Lantern Night',
-    subtitle: 'Carry a lantern, cross a bridge, set a wish on a river of light.',
+    subtitle: 'Carry a lantern, solve one riddle, set a wish on a river of light.',
     enter: 'Enter the night market',
     enterNote: 'WASD to walk · mouse to look · E to interact · Esc to release the cursor',
     loading: 'Lighting the lanterns',
     ready: 'The lanterns are lit',
-    wicks: 'Wicks',
-    riddles: 'Riddles',
-    released: 'Lanterns',
+    step1: 'Light',
+    step2: 'Riddle',
+    step3: 'Release',
+    done: '✓',
+    todo: '○',
+    wicks: 'Lantern',
+    lanterns: 'On river',
+    cooldown: 'Ready in',
     style: 'Lantern',
     none: 'none',
     viewpoints: 'Views',
@@ -50,12 +69,21 @@ const COPY = {
     exitPhoto: 'Leave photo',
     mute: 'Mute',
     unmute: 'Sound',
-    help: 'Back to start',
+    back: 'To the gate',
     ekey: 'E',
     interact: 'Interact',
     close: 'Not now',
     hint: 'Hint',
     mobile: 'Drag to look around',
+    confirm: 'Release this lantern',
+    selected: 'Chosen',
+    photoHint: 'Tap blank space to leave; use the system screenshot.',
+    watermark: 'Shangyuan Lantern Night',
+    catExit: 'Leave the cat trial',
+    catReset: 'Back to the mat',
+    catStep1: 'Tip the basket',
+    catStep2: 'Leap to the shed',
+    catDone: 'Cat trial complete',
   },
 } as const
 
@@ -69,18 +97,24 @@ export default function ShangyuanWorld({ language }: Props) {
   const [panel, setPanel] = useState<Panel | null>(null)
   const [hud, setHud] = useState<SceneHud>({
     phase: 'idle',
-    wicks: 0,
-    riddles: 0,
-    released: 0,
+    claimed: false,
+    riddleSolved: false,
+    released: false,
+    releasedCount: 0,
+    activeLanterns: 0,
+    cooldown: 0,
     style: '',
     blessing: '',
     showActive: false,
+    cat: { active: false, basketTipped: false, onShed: false, completed: false, action: '' },
   })
   const [toast, setToast] = useState('')
   const [photo, setPhoto] = useState(false)
+  const [photoHint, setPhotoHint] = useState(false)
   const [muted, setMuted] = useState(false)
   const [view, setView] = useState(0)
   const toastTimer = useRef<number | null>(null)
+  const hintTimer = useRef<number | null>(null)
   const t = COPY[language]
 
   const flash = useCallback((text: string) => {
@@ -108,19 +142,32 @@ export default function ShangyuanWorld({ language }: Props) {
       scene.dispose()
       sceneRef.current = null
       if (toastTimer.current) window.clearTimeout(toastTimer.current)
+      if (hintTimer.current) window.clearTimeout(hintTimer.current)
     }
   }, [flash])
+
+  const togglePhoto = useCallback(() => {
+    const next = sceneRef.current?.togglePhoto() ?? false
+    setPhoto(next)
+    if (next) {
+      // PRD §7.6: show the exit hint once for ~3 s, then fade it out.
+      setPhotoHint(true)
+      if (hintTimer.current) window.clearTimeout(hintTimer.current)
+      hintTimer.current = window.setTimeout(() => setPhotoHint(false), 3000)
+    } else {
+      setPhotoHint(false)
+    }
+  }, [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code === 'Escape' && photo) {
-        setPhoto(false)
-        sceneRef.current?.togglePhoto()
+        togglePhoto()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [photo])
+  }, [photo, togglePhoto])
 
   const enter = () => {
     setEntered(true)
@@ -129,26 +176,27 @@ export default function ShangyuanWorld({ language }: Props) {
 
   const choose = (index: number) => sceneRef.current?.choose(index)
 
-  const togglePhoto = () => {
-    const next = sceneRef.current?.togglePhoto() ?? false
-    setPhoto(next)
-  }
-
   const toggleMute = () => {
     const next = !muted
     setMuted(next)
     sceneRef.current?.setMuted(next)
   }
 
-  const phaseLabel: Record<Phase, string> = {
-    idle: '入市',
-    claimed: '已领灯',
-    riddle: '猜谜',
-    style: '已选灯',
-    blessing: '写祝词',
-    released: '已放灯',
-    show: '灯会',
-  }
+  const suggestion = (() => {
+    if (hud.cat.active) {
+      return hud.cat.completed
+        ? '狸奴试玩完成，可以退出继续逛。'
+        : hud.cat.onShed
+          ? '在棚上歇一会，或退出试玩。'
+          : hud.cat.basketTipped
+            ? '去爪印处，跃上矮棚。'
+            : '走近竹筐，试着扑一下。'
+    }
+    if (!hud.claimed) return '走到灯案前，点亮你的花灯。'
+    if (!hud.riddleSolved) return '到灯谜摊猜一道谜。'
+    if (!hud.released) return '去埠头选一盏河灯，留一句愿。'
+    return '心愿已入河，继续逛逛吧。'
+  })()
 
   const touch = (move: number, strafe: number) => ({
     onPointerDown: (e: React.PointerEvent) => {
@@ -160,9 +208,19 @@ export default function ShangyuanWorld({ language }: Props) {
     onPointerLeave: () => sceneRef.current?.setTouch(0, 0),
   })
 
+  const cat = hud.cat
+
   return (
     <div className={s.root}>
-      <canvas ref={canvasRef} className={s.canvas} aria-label={t.title} />
+      <canvas
+        ref={canvasRef}
+        className={s.canvas}
+        aria-label={t.title}
+        onPointerDown={() => {
+          // PRD §7.6: tapping blank space leaves photo mode without a keyboard.
+          if (photo) togglePhoto()
+        }}
+      />
 
       <div className={`${s.vignette} ${photo ? s.vignettePhoto : ''}`} aria-hidden />
 
@@ -189,20 +247,66 @@ export default function ShangyuanWorld({ language }: Props) {
 
       {entered && (
         <>
-          <header className={`${s.hud} ${photo ? s.hidden : ''}`}>
+          <header className={`${s.hud} ${photo || cat.active ? s.hidden : ''}`}>
             <div className={s.hudLeft}>
               <span className={s.brand}>{t.title}</span>
-              <span className={s.phase}>{phaseLabel[hud.phase]}</span>
+              <span className={s.steps}>
+                <span className={hud.claimed ? s.stepOn : s.step}>
+                  {hud.claimed ? t.done : t.todo} {t.step1}
+                </span>
+                <span className={hud.riddleSolved ? s.stepOn : s.step}>
+                  {hud.riddleSolved ? t.done : t.todo} {t.step2}
+                </span>
+                <span className={hud.released ? s.stepOn : s.step}>
+                  {hud.released ? t.done : t.todo} {t.step3}
+                </span>
+              </span>
             </div>
             <div className={s.chips}>
-              <Chip label={t.wicks} value={String(hud.wicks)} />
-              <Chip label={t.riddles} value={`${hud.riddles}/3`} />
-              <Chip label={t.released} value={String(hud.released)} />
-              <Chip label={t.style} value={hud.style || t.none} wide />
+              {hud.style && <Chip label={t.style} value={hud.style} wide />}
+              <Chip label={t.lanterns} value={String(hud.activeLanterns)} />
+              {hud.cooldown > 0 && <Chip label={t.cooldown} value={`${hud.cooldown}s`} />}
             </div>
           </header>
 
-          <div className={`${s.toolbar} ${photo ? s.hidden : ''}`}>
+          {!photo && !cat.active && <div className={s.suggest}>{suggestion}</div>}
+
+          {cat.active && (
+            <div className={`${s.catHud} ${photo ? s.hidden : ''}`}>
+              <div className={s.catProgress}>
+                {cat.completed ? (
+                  <span className={s.stepOn}>✓ {t.catDone}</span>
+                ) : (
+                  <>
+                    <span className={cat.basketTipped ? s.stepOn : s.step}>
+                      {cat.basketTipped ? t.done : t.todo} {t.catStep1}
+                    </span>
+                    <span className={cat.onShed ? s.stepOn : s.step}>
+                      {cat.onShed ? t.done : t.todo} {t.catStep2}
+                    </span>
+                  </>
+                )}
+              </div>
+              <div className={s.catTools}>
+                <button
+                  type="button"
+                  className={s.tool}
+                  onClick={() => sceneRef.current?.resetCatAttempt()}
+                >
+                  {t.catReset}
+                </button>
+                <button
+                  type="button"
+                  className={s.tool}
+                  onClick={() => sceneRef.current?.exitCat()}
+                >
+                  {t.catExit}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className={`${s.toolbar} ${photo || cat.active ? s.hidden : ''}`}>
             <div className={s.views}>
               {VIEWPOINTS.map((v, i) => (
                 <button
@@ -230,55 +334,75 @@ export default function ShangyuanWorld({ language }: Props) {
                 className={s.tool}
                 onClick={() => {
                   setView(0)
-                  sceneRef.current?.setViewpoint(0)
+                  sceneRef.current?.returnToEntrance()
                 }}
               >
-                {t.help}
+                {t.back}
               </button>
             </div>
           </div>
 
-          <div className={`${s.crosshair} ${photo ? s.hidden : ''}`} aria-hidden />
+          <div className={`${s.crosshair} ${photo || cat.active ? s.hidden : ''}`} aria-hidden />
 
-          {prompt && !panel && (
-            <div className={`${s.prompt} ${photo ? s.hidden : ''}`}>
+          {prompt && !panel && !photo && (
+            <div className={s.prompt}>
               <button
                 type="button"
-                className={s.promptButton}
+                className={prompt.locked ? s.promptButtonLocked : s.promptButton}
                 onClick={() => sceneRef.current?.interact()}
               >
                 <kbd>{t.ekey}</kbd>
                 <span>{prompt.label}</span>
+                {prompt.note && <span className={s.promptNote}>{prompt.note}</span>}
               </button>
             </div>
           )}
 
           {toast && <div className={`${s.toast} ${photo ? s.hidden : ''}`}>{toast}</div>}
 
-          {panel && (
+          {panel?.kind === 'release' ? (
             <div className={s.panelWrap} role="dialog" aria-modal="true" aria-label={panel.title}>
               <div className={s.panel}>
                 <p className={s.panelTitle}>{panel.title}</p>
                 <p className={s.panelBody}>{panel.body}</p>
-                <div className={s.options}>
+                <div className={s.sectionLabel}>选一盏河灯</div>
+                <div className={s.optionRow}>
                   {panel.options.map((o, i) => (
                     <button
                       key={o.label}
                       type="button"
-                      className={o.disabled ? s.optionOff : s.option}
-                      disabled={o.disabled}
-                      onClick={() => choose(i)}
+                      className={panel.selectedStyle === i ? s.pillOn : s.pill}
+                      onClick={() => sceneRef.current?.selectStyle(i)}
                     >
                       <span className={s.optionLabel}>{o.label}</span>
                       {o.note && <span className={s.optionNote}>{o.note}</span>}
                     </button>
                   ))}
                 </div>
-                {panel.hint && (
-                  <p className={s.hint}>
-                    <b>{t.hint}</b> {panel.hint}
-                  </p>
-                )}
+                <div className={s.sectionLabel}>留一句祝词</div>
+                <div className={s.optionRow}>
+                  {['平安顺遂', '阖家团圆', '前程似锦', '与君相逢'].map((label, i) => (
+                    <button
+                      key={label}
+                      type="button"
+                      className={panel.selectedBlessing === i ? s.pillOn : s.pill}
+                      onClick={() => sceneRef.current?.selectBlessing(i)}
+                    >
+                      <span className={s.optionLabel}>{label}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className={s.summary}>
+                  {t.selected}：{panel.options[panel.selectedStyle ?? 0]?.label} ·{' '}
+                  {['平安顺遂', '阖家团圆', '前程似锦', '与君相逢'][panel.selectedBlessing ?? 0]}
+                </p>
+                <button
+                  type="button"
+                  className={s.confirm}
+                  onClick={() => sceneRef.current?.confirmRelease()}
+                >
+                  {panel.confirmLabel ?? t.confirm}
+                </button>
                 <button
                   type="button"
                   className={s.close}
@@ -288,6 +412,41 @@ export default function ShangyuanWorld({ language }: Props) {
                 </button>
               </div>
             </div>
+          ) : (
+            panel && (
+              <div className={s.panelWrap} role="dialog" aria-modal="true" aria-label={panel.title}>
+                <div className={s.panel}>
+                  <p className={s.panelTitle}>{panel.title}</p>
+                  <p className={s.panelBody}>{panel.body}</p>
+                  <div className={s.options}>
+                    {panel.options.map((o, i) => (
+                      <button
+                        key={o.label}
+                        type="button"
+                        className={o.disabled ? s.optionOff : s.option}
+                        disabled={o.disabled}
+                        onClick={() => choose(i)}
+                      >
+                        <span className={s.optionLabel}>{o.label}</span>
+                        {o.note && <span className={s.optionNote}>{o.note}</span>}
+                      </button>
+                    ))}
+                  </div>
+                  {panel.hint && (
+                    <p className={s.hint}>
+                      <b>{t.hint}</b> {panel.hint}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    className={s.close}
+                    onClick={() => sceneRef.current?.closePanel()}
+                  >
+                    {t.close}
+                  </button>
+                </div>
+              </div>
+            )
           )}
 
           <div
@@ -312,13 +471,21 @@ export default function ShangyuanWorld({ language }: Props) {
               className={`${s.pad} ${s.padAct}`}
               onClick={() => sceneRef.current?.interact()}
             >
-              {t.interact}
+              {cat.active ? cat.action || t.interact : t.interact}
             </button>
           </div>
         </>
       )}
 
-      {photo && <div className={s.frame} aria-hidden />}
+      {photo && (
+        <>
+          <div className={s.frame} aria-hidden />
+          <div className={`${s.watermark} ${photoHint ? '' : s.watermarkDim}`} aria-hidden>
+            {language === 'zh' ? '桃源·上元灯会' : 'Shangyuan Lantern Night'}
+          </div>
+          {photoHint && <div className={s.photoHint}>{t.photoHint}</div>}
+        </>
+      )}
     </div>
   )
 }
