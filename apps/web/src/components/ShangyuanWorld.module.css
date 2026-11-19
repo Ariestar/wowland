@@ -270,6 +270,201 @@
   color: #ffd8a2;
 }
 
+/* Three-step main-line progress (PRD §4.3): text + mark, never colour alone. */
+
+.steps {
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+
+.step {
+  color: rgba(243, 230, 207, 0.55);
+}
+
+.stepOn {
+  color: #ffd39b;
+  text-shadow: 0 0 12px rgba(255, 180, 100, 0.45);
+}
+
+/* Top-centre suggestion line. */
+
+.suggest {
+  position: absolute;
+  top: 74px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 18px;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  color: rgba(243, 230, 207, 0.78);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.85);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Cat-trial HUD (PRD §4.3 cat progress). */
+
+.catHud {
+  position: absolute;
+  top: 16px;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 clamp(16px, 3vw, 38px);
+  pointer-events: none;
+}
+
+.catProgress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 8px 14px;
+  border: 1px solid rgba(241, 200, 138, 0.24);
+  background: rgba(6, 12, 24, 0.55);
+  backdrop-filter: blur(6px);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+}
+
+.catTools {
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid rgba(241, 200, 138, 0.16);
+  background: rgba(6, 12, 24, 0.5);
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+}
+
+/* Release panel sections (PRD §7.3). */
+
+.sectionLabel {
+  margin: 14px 0 8px;
+  font-size: 11px;
+  letter-spacing: 0.26em;
+  color: rgba(241, 200, 138, 0.7);
+}
+
+.optionRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pill,
+.pillOn {
+  flex: 1 1 30%;
+  min-width: 104px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  padding: 12px 16px;
+  color: #f6e6cd;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.pill {
+  border: 1px solid rgba(241, 200, 138, 0.22);
+  background: rgba(255, 190, 110, 0.04);
+}
+
+.pill:hover {
+  border-color: rgba(255, 210, 160, 0.7);
+  background: rgba(255, 190, 110, 0.13);
+}
+
+.pillOn {
+  border: 1px solid rgba(255, 205, 150, 0.85);
+  background: rgba(255, 190, 110, 0.18);
+  color: #ffe9cd;
+}
+
+.summary {
+  margin-top: 16px;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: rgba(243, 230, 207, 0.75);
+}
+
+.confirm {
+  margin-top: 12px;
+  width: 100%;
+  padding: 13px 0;
+  border: 1px solid rgba(255, 210, 150, 0.7);
+  background: linear-gradient(to bottom, rgba(255, 190, 110, 0.22), rgba(255, 160, 70, 0.08));
+  color: #ffe4bb;
+  font-family: inherit;
+  font-size: 15px;
+  letter-spacing: 0.22em;
+  cursor: pointer;
+  transition:
+    background 0.25s ease,
+    border-color 0.25s ease;
+}
+
+.confirm:hover {
+  background: rgba(255, 190, 110, 0.3);
+  border-color: rgba(255, 225, 175, 0.95);
+}
+
+/* Locked prompt variant: readable but dimmed, with the reason inline. */
+
+.promptButtonLocked {
+  opacity: 0.62;
+  cursor: default;
+}
+
+.promptNote {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: rgba(243, 230, 207, 0.55);
+  border-left: 1px solid rgba(243, 230, 207, 0.2);
+  padding-left: 10px;
+}
+
+/* Photo mode: watermark + one-time exit hint (PRD §7.6). */
+
+.watermark {
+  position: absolute;
+  right: 22px;
+  bottom: 20px;
+  font-size: 13px;
+  letter-spacing: 0.3em;
+  color: rgba(243, 230, 207, 0.66);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+  transition: opacity 1.2s ease;
+}
+
+.watermarkDim {
+  opacity: 0.45;
+}
+
+.photoHint {
+  position: absolute;
+  left: 50%;
+  bottom: 64px;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border: 1px solid rgba(241, 200, 138, 0.3);
+  background: rgba(8, 14, 26, 0.72);
+  backdrop-filter: blur(6px);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: #ffdcae;
+  animation: fade 0.4s ease both;
+  pointer-events: none;
+}
+
 /* ---------------------------------------------------------------- toolbar */
 
 .toolbar {
@@ -387,12 +582,16 @@
   display: grid;
   place-items: center;
   padding: 24px;
+  overflow-y: auto;
   background: rgba(3, 7, 15, 0.52);
   backdrop-filter: blur(3px);
 }
 
 .panel {
   width: min(520px, 92vw);
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 26px 28px 20px;
   border: 1px solid rgba(241, 200, 138, 0.28);
   background: linear-gradient(to bottom, rgba(14, 22, 38, 0.96), rgba(8, 13, 24, 0.97));
@@ -400,6 +599,25 @@
     0 24px 80px rgba(0, 0, 0, 0.6),
     inset 0 1px 0 rgba(255, 220, 170, 0.12);
   animation: rise 0.24s ease both;
+}
+
+/* Short landscape phones: keep the release panel usable without clipping. */
+@media (max-height: 520px) {
+  .panelWrap {
+    align-content: start;
+    padding: 12px;
+  }
+  .panel {
+    max-height: calc(100dvh - 24px);
+    padding: 16px 18px 14px;
+  }
+  .panelBody {
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+  .sectionLabel {
+    margin: 8px 0 6px;
+  }
 }
 
 .panelTitle {
@@ -501,7 +719,7 @@
 .toast {
   position: absolute;
   left: 50%;
-  top: 84px;
+  top: 118px;
   transform: translateX(-50%);
   padding: 9px 20px;
   border: 1px solid rgba(241, 200, 138, 0.24);
@@ -681,6 +899,8 @@
   .tool {
     font-size: 10px;
     padding: 7px 8px;
+    min-height: 44px;
+    min-width: 44px;
     letter-spacing: 0.04em;
     white-space: nowrap;
     word-break: keep-all;
@@ -692,10 +912,27 @@
   .promptButton {
     font-size: 12px;
     padding: 8px 12px;
+    min-height: 44px;
   }
   .hud {
-    padding: 12px 12px;
+    padding: calc(12px + env(safe-area-inset-top)) 12px 12px;
     gap: 8px;
+  }
+  .catHud {
+    padding: 0 10px;
+    padding-top: calc(8px + env(safe-area-inset-top));
+    gap: 8px;
+  }
+  .catTools .tool {
+    min-height: 40px;
+  }
+  .suggest {
+    top: 96px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    max-width: 92vw;
+    white-space: normal;
+    text-align: center;
   }
   .brand {
     font-size: 14px;
@@ -728,7 +965,7 @@
     font-size: 12px;
   }
   .toast {
-    top: 96px;
+    top: 150px;
     font-size: 11px;
     padding: 7px 12px;
   }

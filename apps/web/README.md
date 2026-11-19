@@ -1,8 +1,11 @@
 # 上元灯夜（网页预览）
 
-一个可以走进去的宋代水城上元灯会：领灯、猜谜、放河灯，看一场灯会。Next.js 16 + React 19 + three.js。
+一个可以走进去的宋代水城上元灯会：领灯、猜一道谜、放河灯，看一场灯会。Next.js 16 + React 19 + three.js。
 
-制作方案见仓库根目录的《桃源上元灯会_制作方案.md》，网页预览的设计与验收记录见 `docs/plans/2026-11-14-shangyuan-lantern-night.md`。
+制作方案见仓库根目录的《桃源上元灯会_制作方案.md》，MVP 交互验收见 `docs/plans/2026-11-19-mvp-vertical-slice.md`，早期预览设计见 `docs/plans/2026-11-14-shangyuan-lantern-night.md`。
+
+当前版本对应 PRD v1.0 的 MVP-A 主线规则（一摊一谜、统一资格、选灯祝词合并面板、
+河灯 5 盏上限 / 10s 冷却 / 60s 回收）与 G0 狸奴占位原型（面具入口、扑筐、跃上矮棚、安全退出）。
 
 ## 运行
 
@@ -28,8 +31,9 @@ pnpm verify:mobile
 ## 目录
 
 - `src/app/page.tsx`：页面（中英文：`?lang=en`）。
-- `src/components/ShangyuanWorld.tsx` + `.module.css`：领灯、灯谜、河灯、祝词、机位界面。
-- `src/lib/shangyuan/`：场景、碰撞、布局、水面、特效、音效、调色。
+- `src/components/ShangyuanWorld.tsx` + `.module.css`：三步进度、合并选灯/祝词面板、取景、狸奴 HUD。
+- `src/lib/shangyuan/`：场景、状态机、碰撞、布局、水面、特效、音效、调色。
+- `src/lib/shangyuan/cat.ts`：狸奴 G0 占位原型（猫、竹筐、橘子、矮棚与动作状态机）。
 - `public/models/lantern-river/`：合并后的世界 GLB、船 GLB、碰撞布局 JSON（由 Blender 导出）。
 - `public/models/shangyuan/`：早期 Shangyuan 模型；入口牌坊、小舟与河灯模板在运行时复用。
 - `public/images/shangyuan/`：进入页封面（来自 `lantern-river` 离线渲染）。

@@ -1,5 +1,5 @@
 /**
- * Capture the preview: gate, six viewpoints, and one interaction pass.
+ * Capture the MVP preview: gate, local viewpoints, and one interaction pass.
  * Usage: node scripts/shangyuan/capture.cjs
  * Output: test-results/shangyuan/capture-<timestamp>/
  */
@@ -17,7 +17,7 @@ const {
   report,
 } = require('./harness.cjs')
 
-const VIEWS = ['入市', '灯市', '桥顶', '埠头', '对岸', '远景']
+const VIEWS = ['入市', '灯谜', '埠头', '灯街']
 
 ;(async () => {
   const OUT = outputDir('capture')
@@ -41,15 +41,15 @@ const VIEWS = ['入市', '灯市', '桥顶', '埠头', '对岸', '远景']
 
   // Interaction pass: stand at the entrance trigger and claim the lantern.
   await clickText(page, '入市', 800)
-  await teleport(page, 16.4, -120)
+  await teleport(page, 16.4, -123)
   await page.keyboard.press('e')
   await page.waitForTimeout(600)
   await shot('10-claim-panel')
-  await clickText(page, '提起花灯', 700)
+  await clickText(page, '点亮花灯', 700)
 
-  // Riddle stall: stand at the quay edge so the authored stall reads whole.
-  await teleport(page, 12.9, 40, 900)
-  await page.evaluate(() => window.__shangyuan.lookAt(18.4, 40, 3.0))
+  // Riddle stall: stand before the authored stall so it reads whole.
+  await teleport(page, 15.6, -104, 900)
+  await page.evaluate(() => window.__shangyuan.lookAt(17.9, -103.9, 3))
   await page.waitForTimeout(400)
   await shot('10b-riddle-stall')
   await page.keyboard.press('e')

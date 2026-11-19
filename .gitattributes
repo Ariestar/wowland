@@ -1,0 +1,15 @@
+# Normalise text files to LF in the repository so Biome's formatter is
+# platform-independent; binary assets are never converted.
+* text=auto eol=lf
+
+*.glb binary
+*.gltf binary
+*.png binary
+*.webp binary
+*.jpg binary
+*.jpeg binary
+*.woff2 binary
+*.wasm binary
+*.blend binary
+*.exr binary
+*.psd binary
