@@ -38,6 +38,13 @@ Browser verification, with `pnpm dev` running in another terminal:
 pnpm verify:visual
 pnpm verify:flow
 pnpm verify:mobile
+pnpm verify:states
+pnpm verify:retry
+pnpm verify:combos
+pnpm verify:limits     # ~2–3 minutes (real cooldown/lifetime)
+pnpm verify:landscape
+pnpm verify:touch
+pnpm verify:soak       # 3 min by default; SOAK_MINUTES=10 for the acceptance run
 ```
 
 ## Asset workflow
