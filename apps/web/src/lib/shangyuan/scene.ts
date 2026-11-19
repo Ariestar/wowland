@@ -1798,6 +1798,12 @@ export class ShangyuanScene {
       textures: info.memory.textures,
       lanterns: this.lanterns.length,
       playerLanterns: this.activeOwnerCount(),
+      oldestOwnerAge: Math.round(
+        this.lanterns.reduce(
+          (oldest, l) => (l.owner ? Math.max(oldest, this.ownerAge(l)) : oldest),
+          0,
+        ),
+      ),
       obstacles: this.obstacleField ? this.layout?.obstacles.length : 0,
       ground: +this.playerGround.toFixed(2),
       reflection: Boolean(this.reflectionTarget),

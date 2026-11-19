@@ -51,11 +51,19 @@ const MAX = 5
 
   const releases = []
   let cooldownBlocked = false
+  let oldestAgeAtFifth = 0
   for (let i = 0; i < MAX; i++) {
     const ok = await openPanelAndRelease()
     await page.waitForTimeout(1700)
     const s = await stats()
-    releases.push({ i: i + 1, ok, count: s.releaseCount, active: s.playerLanterns })
+    releases.push({
+      i: i + 1,
+      ok,
+      count: s.releaseCount,
+      active: s.playerLanterns,
+      oldestAge: s.oldestOwnerAge,
+    })
+    if (i === MAX - 1) oldestAgeAtFifth = s.oldestOwnerAge
     if (i === 0) {
       // Immediately after a release the 10 s cooldown must refuse another one.
       await page.keyboard.press('e')
@@ -107,8 +115,12 @@ const MAX = 5
     fiveReleases: releases.length === MAX && releases.every((r) => r.ok),
     countsIncrease: releases.every((r, i) => r.count === i + 1),
     cooldownRejected: cooldownBlocked,
+    // Lanterns must actually persist before recycling counts as a pass; a
+    // runaway lifetime bug would otherwise make the "recycled" check trivially
+    // true (Codex PR #9 finding).
+    lanternsSurvived: oldestAgeAtFifth >= 40,
     activeNeverExceededCap: releases.every((r) => r.active <= MAX),
-    recycledAtLeastOnce: recycled !== null,
+    recycledAtLeastOnce: recycled !== null && recycled.afterSeconds <= 40,
     rereleaseAllowed: rerelease === true && final.releaseCount >= MAX + 1,
     noPageErrors: errors.length === 0,
   }
