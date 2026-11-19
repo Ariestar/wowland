@@ -91,10 +91,18 @@ const MAX = 5
   const rerelease = await openPanelAndRelease()
   await page.waitForTimeout(1800)
   const final = await stats()
+  const checks = {
+    fiveReleases: releases.length === MAX && releases.every((r) => r.ok),
+    countsIncrease: releases.every((r, i) => r.count === i + 1),
+    activeNeverExceededCap: releases.every((r) => r.active <= MAX),
+    recycledAtLeastOnce: recycled !== null,
+    rereleaseAllowed: rerelease === true && final.releaseCount >= MAX + 1,
+    noPageErrors: errors.length === 0,
+  }
 
   report(OUT, errors, {
+    checks,
     releases,
-    activeNeverExceededCap: releases.every((r) => r.active <= MAX),
     beforeAttempt: {
       active: beforeAttempt.playerLanterns,
       cooldown: beforeAttempt.cooldown,
@@ -107,6 +115,7 @@ const MAX = 5
     finalActive: final.playerLanterns,
   })
   await browser.close()
+  if (Object.values(checks).some((ok) => !ok)) process.exit(1)
 })().catch((e) => {
   console.error(e)
   process.exit(1)

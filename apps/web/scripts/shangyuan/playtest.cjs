@@ -127,8 +127,18 @@ const {
 
   const fpsAfterRelease = await measureFps(page)
   const finalStats = await stats()
+  const checks = {
+    claimed: finalStats.claimed === true,
+    riddleSolved: finalStats.riddleSolved === true,
+    released: finalStats.released === true,
+    twoReleases: finalStats.releaseCount >= 2,
+    catCompleted: finalStats.catCompleted === true,
+    catModeExited: finalStats.catMode === false,
+    noPageErrors: errors.length === 0,
+  }
 
   report(OUT, errors, {
+    checks,
     fpsIdle,
     fpsAfterRelease,
     afterFirst,
@@ -139,6 +149,7 @@ const {
     fps: await measureFps(page),
   })
   await browser.close()
+  if (Object.values(checks).some((ok) => !ok)) process.exit(1)
 })().catch((e) => {
   console.error(e)
   process.exit(1)

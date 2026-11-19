@@ -57,12 +57,15 @@ const BLESSINGS = ['平安顺遂', '阖家团圆', '前程似锦', '与君相逢
   }
   await shot('combos-final')
 
+  const failed = rows.filter((r) => !r.ok)
   report(OUT, errors, {
     total: rows.length,
-    passed: rows.filter((r) => r.ok).length,
-    failures: rows.filter((r) => !r.ok),
+    passed: rows.length - failed.length,
+    failures: failed,
   })
   await browser.close()
+  // A verification script must fail the command when its checks fail.
+  if (failed.length > 0 || errors.length > 0) process.exit(1)
 })().catch((e) => {
   console.error(e)
   process.exit(1)
