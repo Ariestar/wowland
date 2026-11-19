@@ -14,6 +14,7 @@ import { spawnSync } from 'node:child_process'
 import { copyFileSync, existsSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { optimizeTextures } from './optimize-textures.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const assetDir = join(root, 'packages', 'assets', 'lantern-river')
@@ -25,6 +26,7 @@ const args = new Set(process.argv.slice(2))
 const withAtlas = args.has('--atlas')
 const exportOnly = args.has('--export')
 const noCopy = args.has('--no-copy')
+const noWebp = args.has('--no-webp')
 
 const blender =
   process.env.BLENDER ||
@@ -83,6 +85,12 @@ run('glb + layout export', blender, [
 
 const glb = join(assetDir, 'web', 'world.glb')
 const layout = join(assetDir, 'web', 'layout.json')
+
+if (!noWebp) {
+  process.stdout.write('\n▸ webp textures\n')
+  optimizeTextures(glb)
+}
+
 const doc = readGlbJson(glb)
 const masked = doc.materials.filter((m) => m.alphaMode === 'MASK').length
 if (masked < 2) {

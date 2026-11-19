@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
@@ -19,6 +20,7 @@ import {
   VIEWPOINTS,
 } from './data'
 import { type Effect, IronFlower, ParticleBurst, Ripple, RiverAtmosphere } from './effects'
+import { WaterlineFlora } from './flora'
 import { gradingShader, sanitizeShader } from './postFx'
 import type { Panel, Phase, SceneCallbacks } from './types'
 import { batTexture, createWaterMaterial, glowTexture, skyLanternTexture } from './water'
@@ -63,16 +65,20 @@ export class ShangyuanScene {
   private readonly bloom: UnrealBloomPass
   private readonly grading: ShaderPass
   private readonly atmosphere: RiverAtmosphere
+  private flora: WaterlineFlora | null = null
   private readonly clock = new THREE.Clock()
   private readonly loader = new GLTFLoader()
   private readonly audio = new ShangyuanAudio()
 
   private readonly waterMat: THREE.ShaderMaterial
+  private readonly water: THREE.Mesh
   private readonly highTier = highQuality()
+  private readonly reflectionTarget: THREE.WebGLRenderTarget | null
+  private readonly reflectionCamera = new THREE.PerspectiveCamera()
   private worldReady = false
   private shadowFrames = 0
   private shadowFrozen = false
-  private reflection: THREE.Object3D | null = null
+  private reflectionTick = 0
   private environmentMap: THREE.Texture | null = null
   private readonly glow: THREE.Texture
   private readonly skyGlow: THREE.Texture
@@ -168,12 +174,18 @@ export class ShangyuanScene {
     this.glow = glowTexture()
     this.skyGlow = skyLanternTexture()
     this.waterMat = createWaterMaterial(reflectionBudget() ? 0.8 : 0.96)
-    const water = new THREE.Mesh(new THREE.PlaneGeometry(36, 380), this.waterMat)
-    water.rotation.x = -Math.PI / 2
-    water.position.set(0, 0.05, -20)
+    this.water = new THREE.Mesh(new THREE.PlaneGeometry(36, 380, 48, 320), this.waterMat)
+    this.water.rotation.x = -Math.PI / 2
+    this.water.position.set(0, 0.05, -20)
     // Draw before floating lanterns so its transparency never swallows them.
-    water.renderOrder = -2
-    this.scene.add(water)
+    this.water.renderOrder = -2
+    this.scene.add(this.water)
+    this.reflectionTarget = reflectionBudget()
+      ? new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType })
+      : null
+    if (this.reflectionTarget) {
+      this.waterMat.uniforms.uReflection.value = this.reflectionTarget.texture
+    }
 
     this.atmosphere = new RiverAtmosphere(this.glow, batTexture())
     this.scene.add(this.atmosphere.object)
@@ -181,9 +193,33 @@ export class ShangyuanScene {
     this.composer = new EffectComposer(this.renderer)
     this.composer.addPass(new RenderPass(this.scene, this.camera))
     this.composer.addPass(new ShaderPass(sanitizeShader()))
+    if (this.highTier) {
+      // Ground contact is what the night lighting lacks most; a short-radius
+      // GTAO pass darkens eaves, plinths and the base of every prop.
+      const gtao = new GTAOPass(this.scene, this.camera, 1, 1)
+      gtao.output = GTAOPass.OUTPUT.Default
+      gtao.blendIntensity = 0.8
+      gtao.updateGtaoMaterial({
+        radius: 0.55,
+        distanceExponent: 1.4,
+        thickness: 1.2,
+        scale: 1,
+        samples: 16,
+        distanceFallOff: 1,
+        screenSpaceRadius: false,
+      })
+      gtao.updatePdMaterial({ radius: 5, rings: 2, samples: 12 })
+      // The AO buffer is upscaled anyway, so rendering its depth/normal
+      // prepass at half size removes a full-resolution scene pass.
+      const setGtaoSize = gtao.setSize.bind(gtao)
+      gtao.setSize = (width: number, height: number) => {
+        setGtaoSize(Math.max(1, Math.round(width / 2)), Math.max(1, Math.round(height / 2)))
+      }
+      this.composer.addPass(gtao)
+    }
     // A higher threshold keeps the lantern cores hot while the shoji walls stay
     // crisp; a low threshold turned the whole midground into warm haze.
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.62, 0.55, 0.85)
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.5, 0.45, 0.9)
     this.composer.addPass(this.bloom)
     this.composer.addPass(new OutputPass())
     this.grading = new ShaderPass(gradingShader())
@@ -614,6 +650,15 @@ export class ShangyuanScene {
     this.composer.setSize(w, h)
     this.camera.aspect = w / Math.max(1, h)
     this.camera.updateProjectionMatrix()
+    if (this.reflectionTarget) {
+      const buffer = this.renderer.getDrawingBufferSize(new THREE.Vector2())
+      // Slightly under half resolution keeps the mirror soft like water and
+      // leaves most of the frame budget to the main pass.
+      this.reflectionTarget.setSize(
+        Math.max(1, Math.round(buffer.x * 0.35)),
+        Math.max(1, Math.round(buffer.y * 0.35)),
+      )
+    }
     const skyMat = this.skyLanterns?.points.material as THREE.ShaderMaterial | undefined
     if (skyMat) skyMat.uniforms.uScale.value = (h * this.renderer.getPixelRatio()) / 2
   }
@@ -643,6 +688,10 @@ export class ShangyuanScene {
         this.playerGround = layout.groundZ
         this.riverHalf = layout.riverHalf
         this.waterMat.uniforms.uBankX.value = layout.riverHalf
+        // The reeds read the bank line from the same layout, so a wider canal
+        // moves the planting with the water instead of leaving it on dry stone.
+        this.flora = new WaterlineFlora(layout.riverHalf, 0.05)
+        this.scene.add(this.flora.object)
         this.player.set(layout.spawn.x, layout.groundZ + EYE, -layout.spawn.y)
         this.camera.position.copy(this.player)
         this.buildCollisionDebug()
@@ -682,7 +731,6 @@ export class ShangyuanScene {
       this.tuneGlowMaterials(world)
       this.scene.add(world)
       this.prepareTower(world)
-      this.addReflection(world)
       tick()
     })
 
@@ -724,9 +772,11 @@ export class ShangyuanScene {
    */
   private tuneGlowMaterials(world: THREE.Object3D) {
     const glowStrength: Record<string, number> = {
-      MAT_SCENE_BulbWarm: 4.2,
-      MAT_SCENE_BulbRed: 4.6,
-      MAT_SCENE_BulbGold: 3.0,
+      // Above ~3 the paper clips to a white disc at arm's length; the lantern
+      // frame and the warm paper tone only survive below that.
+      MAT_SCENE_BulbWarm: 2.7,
+      MAT_SCENE_BulbRed: 3.2,
+      MAT_SCENE_BulbGold: 2.4,
       MAT_SCENE_QuayLantern: 2.6,
       MAT_SCENE_BoatPaper: 3.4,
       // Shoji paper carries the shopfronts; at 1.0 they sit flat under the
@@ -769,29 +819,90 @@ export class ShangyuanScene {
   }
 
   /**
-   * Mirror the finished world under the water.  The river surface is a shader
-   * with a little transparency, so the mirrored lanterns and facades show
-   * through and every quay light gets a real, correctly placed reflection.
+   * Render the world from the camera mirrored across the water plane into a
+   * half-resolution target.  The water shader samples it in screen space, so
+   * the facades and lanterns reflect without a second copy of the world in the
+   * main pass.  An oblique projection clips everything below the surface.
    */
-  private addReflection(world: THREE.Object3D) {
-    if (!reflectionBudget()) return
-    const mirror = world.clone(true)
-    mirror.name = 'LanternRiver_Reflection'
-    // The water sits at y = 0.05, so mirroring across that plane is 0.1 - y.
-    mirror.scale.y = -1
-    mirror.position.y = 0.1
-    mirror.traverse((o) => {
-      const mesh = o as THREE.Mesh
-      if (!mesh.isMesh) return
-      mesh.castShadow = false
-      mesh.receiveShadow = false
-      // The mirrored copy is one object graph away from the camera; culling it
-      // per mesh would fight the single merged world mesh anyway.
-      mesh.frustumCulled = false
-      mesh.renderOrder = -1
-    })
-    this.scene.add(mirror)
-    this.reflection = mirror
+  private renderReflection() {
+    const target = this.reflectionTarget
+    if (!target || !this.worldReady) return
+    // The canal is calm and the camera moves slowly; a 30 Hz mirror is
+    // indistinguishable from a per-frame one and leaves the main pass budget.
+    if (this.reflectionTick++ % 2 !== 0) return
+
+    const camera = this.camera
+    const waterY = 0.05
+    const normal = new THREE.Vector3(0, 1, 0)
+    const reflector = new THREE.Vector3(0, waterY, 0)
+
+    // Reflect the camera position and look-at point across the surface.
+    const view = new THREE.Vector3().subVectors(reflector, camera.position)
+    view.reflect(normal).negate().add(reflector)
+    const lookAt = new THREE.Vector3(0, 0, -1).applyMatrix4(camera.matrixWorld)
+    const targetPoint = new THREE.Vector3().subVectors(reflector, lookAt)
+    targetPoint.reflect(normal).negate().add(reflector)
+
+    const virtual = this.reflectionCamera
+    virtual.position.copy(view)
+    virtual.up.set(0, 1, 0).applyQuaternion(camera.quaternion).reflect(normal)
+    virtual.lookAt(targetPoint)
+    virtual.near = camera.near
+    virtual.far = camera.far
+    virtual.updateMatrixWorld()
+    virtual.projectionMatrix.copy(camera.projectionMatrix)
+    virtual.projectionMatrixInverse.copy(virtual.projectionMatrix).invert()
+
+    // Oblique near plane (Lengyel) clips the world at the waterline.
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, reflector)
+    plane.applyMatrix4(virtual.matrixWorldInverse)
+    const clip = new THREE.Vector4(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant)
+    const q = new THREE.Vector4()
+    const pm = virtual.projectionMatrix
+    q.x = (Math.sign(clip.x) + pm.elements[8]) / pm.elements[0]
+    q.y = (Math.sign(clip.y) + pm.elements[9]) / pm.elements[5]
+    q.z = -1
+    q.w = (1 + pm.elements[10]) / pm.elements[14]
+    clip.multiplyScalar(2 / clip.dot(q))
+    pm.elements[2] = clip.x
+    pm.elements[6] = clip.y
+    pm.elements[10] = clip.z + 1 - 0.003
+    pm.elements[14] = clip.w
+    virtual.projectionMatrixInverse.copy(pm).invert()
+
+    // Project water-surface points into the reflection target.  The oblique
+    // projection differs from the main camera's, so this matrix is the only
+    // mapping that stays aligned at grazing angles.
+    const textureMatrix = new THREE.Matrix4().set(
+      0.5,
+      0,
+      0,
+      0.5,
+      0,
+      0.5,
+      0,
+      0.5,
+      0,
+      0,
+      0.5,
+      0.5,
+      0,
+      0,
+      0,
+      1,
+    )
+    textureMatrix.multiply(virtual.projectionMatrix)
+    textureMatrix.multiply(virtual.matrixWorldInverse)
+    this.waterMat.uniforms.uReflectionMatrix.value.copy(textureMatrix)
+
+    const previous = this.renderer.getRenderTarget()
+    this.water.visible = false
+    this.renderer.setRenderTarget(target)
+    this.renderer.clear()
+    this.renderer.render(this.scene, virtual)
+    this.renderer.setRenderTarget(previous)
+    this.water.visible = true
+    this.waterMat.uniforms.uReflectionStrength.value = 1
   }
 
   /**
@@ -1209,7 +1320,7 @@ export class ShangyuanScene {
       lanterns: this.lanterns.length,
       obstacles: this.obstacleField ? this.layout?.obstacles.length : 0,
       ground: +this.playerGround.toFixed(2),
-      reflection: Boolean(this.reflection),
+      reflection: Boolean(this.reflectionTarget),
       phase: this.phase,
       showStage: this.showStage,
     }
@@ -1283,6 +1394,8 @@ export class ShangyuanScene {
     // Movement stays stable under hitches, but event timing must follow the wall clock,
     // otherwise the show crawls whenever the frame rate dips.
     this.update(Math.min(raw, 0.05), Math.min(raw, 0.3))
+    this.camera.updateMatrixWorld()
+    this.renderReflection()
     this.renderer.info.reset()
     this.composer.render()
 
@@ -1318,6 +1431,7 @@ export class ShangyuanScene {
 
     this.waterMat.uniforms.uTime.value += dt
     this.atmosphere.update(dt)
+    this.flora?.update(dt)
     this.grading.uniforms.uTime.value += dt
 
     for (const wheel of this.wheelPivots) wheel.rotation.z += dt * 0.24
@@ -1699,6 +1813,7 @@ export class ShangyuanScene {
       e.dispose(this.scene)
     })
     this.atmosphere.dispose(this.scene)
+    this.flora?.dispose()
     this.audio.dispose()
     this.scene.traverse((o) => {
       const mesh = o as THREE.Mesh
