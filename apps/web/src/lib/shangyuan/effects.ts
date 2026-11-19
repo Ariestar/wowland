@@ -10,7 +10,7 @@ export class Ripple implements Effect {
   private age = 0
 
   constructor(scene: THREE.Scene, origin: THREE.Vector3) {
-    const geo = new THREE.RingGeometry(0.18, 0.26, 48)
+    const geo = new THREE.RingGeometry(0.22, 0.26, 48)
     const mat = new THREE.MeshBasicMaterial({
       color: 0xffc98a,
       transparent: true,
@@ -27,13 +27,13 @@ export class Ripple implements Effect {
 
   update(dt: number) {
     this.age += dt
-    const s = 1 + this.age * 1.8
+    const s = 1 + this.age * 2.1
     this.mesh.scale.setScalar(s)
     ;(this.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(
       0,
-      0.8 * (1 - this.age / 2.2),
+      0.75 * (1 - this.age / 1.6),
     )
-    return this.age < 2.2
+    return this.age < 1.6
   }
 
   dispose(scene: THREE.Scene) {

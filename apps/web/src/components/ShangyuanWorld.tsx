@@ -152,6 +152,7 @@ export default function ShangyuanWorld({ language }: Props) {
     if (next) {
       // PRD §7.6: show the exit hint once for ~3 s, then fade it out.
       setPhotoHint(true)
+      setToast('')
       if (hintTimer.current) window.clearTimeout(hintTimer.current)
       hintTimer.current = window.setTimeout(() => setPhotoHint(false), 3000)
     } else {
@@ -274,18 +275,13 @@ export default function ShangyuanWorld({ language }: Props) {
           {cat.active && (
             <div className={`${s.catHud} ${photo ? s.hidden : ''}`}>
               <div className={s.catProgress}>
-                {cat.completed ? (
-                  <span className={s.stepOn}>✓ {t.catDone}</span>
-                ) : (
-                  <>
-                    <span className={cat.basketTipped ? s.stepOn : s.step}>
-                      {cat.basketTipped ? t.done : t.todo} {t.catStep1}
-                    </span>
-                    <span className={cat.onShed ? s.stepOn : s.step}>
-                      {cat.onShed ? t.done : t.todo} {t.catStep2}
-                    </span>
-                  </>
-                )}
+                <span className={cat.basketTipped ? s.stepOn : s.step}>
+                  {cat.basketTipped ? t.done : t.todo} {t.catStep1}
+                </span>
+                <span className={cat.onShed ? s.stepOn : s.step}>
+                  {cat.onShed ? t.done : t.todo} {t.catStep2}
+                </span>
+                {cat.completed && <span className={s.stepOn}>✓ {t.catDone}</span>}
               </div>
               <div className={s.catTools}>
                 <button
@@ -348,7 +344,9 @@ export default function ShangyuanWorld({ language }: Props) {
             <div className={s.prompt}>
               <button
                 type="button"
-                className={prompt.locked ? s.promptButtonLocked : s.promptButton}
+                className={
+                  prompt.locked ? `${s.promptButton} ${s.promptButtonLocked}` : s.promptButton
+                }
                 onClick={() => sceneRef.current?.interact()}
               >
                 <kbd>{t.ekey}</kbd>
@@ -358,7 +356,7 @@ export default function ShangyuanWorld({ language }: Props) {
             </div>
           )}
 
-          {toast && <div className={`${s.toast} ${photo ? s.hidden : ''}`}>{toast}</div>}
+          {toast && !photo && <div className={s.toast}>{toast}</div>}
 
           {panel?.kind === 'release' ? (
             <div className={s.panelWrap} role="dialog" aria-modal="true" aria-label={panel.title}>

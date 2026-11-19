@@ -320,6 +320,7 @@
 
 .catProgress {
   display: flex;
+  flex-wrap: wrap;
   gap: 14px;
   padding: 8px 14px;
   border: 1px solid rgba(241, 200, 138, 0.24);
@@ -695,7 +696,7 @@
 .toast {
   position: absolute;
   left: 50%;
-  top: 84px;
+  top: 118px;
   transform: translateX(-50%);
   padding: 9px 20px;
   border: 1px solid rgba(241, 200, 138, 0.24);
@@ -875,6 +876,8 @@
   .tool {
     font-size: 10px;
     padding: 7px 8px;
+    min-height: 44px;
+    min-width: 44px;
     letter-spacing: 0.04em;
     white-space: nowrap;
     word-break: keep-all;
@@ -886,10 +889,27 @@
   .promptButton {
     font-size: 12px;
     padding: 8px 12px;
+    min-height: 44px;
   }
   .hud {
-    padding: 12px 12px;
+    padding: calc(12px + env(safe-area-inset-top)) 12px 12px;
     gap: 8px;
+  }
+  .catHud {
+    padding: 0 10px;
+    padding-top: calc(8px + env(safe-area-inset-top));
+    gap: 8px;
+  }
+  .catTools .tool {
+    min-height: 40px;
+  }
+  .suggest {
+    top: 96px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    max-width: 92vw;
+    white-space: normal;
+    text-align: center;
   }
   .brand {
     font-size: 14px;
@@ -922,7 +942,7 @@
     font-size: 12px;
   }
   .toast {
-    top: 96px;
+    top: 150px;
     font-size: 11px;
     padding: 7px 12px;
   }

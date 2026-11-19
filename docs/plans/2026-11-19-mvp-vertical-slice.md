@@ -114,3 +114,27 @@ pnpm verify:flow
 ```
 
 截图与运行数据输出在 `apps/web/test-results/shangyuan/`（本地产物，不入库）。
+
+## 7. 首次真实试玩（子 agent 操控）与第二轮修复
+
+子 agent 以首次玩家身份、不使用传送完整试玩后，报告 1 个阻断项与 4 个 MAJOR；本轮已全部修复并复验：
+
+| 问题 | 根因 | 修复 |
+|---|---|---|
+| B-01 鼠标锁定后所有 UI 按钮点不动 | canvas 指针锁定期间点击都被 canvas 吞掉，打开面板时未释放锁 | 打开面板/取景/狸奴前 `releasePointer()`；面板与猫形期间不再请求锁定；关闭面板后 400ms 内忽略画布点击 |
+| 锁定态提示条变成白色默认按钮 | `promptButtonLocked` 未挂基类 | 同时应用 `promptButton` + 锁定修饰类，仅降低透明度 |
+| 顶部建议行与 toast 重叠、文案重复 | toast top 84px 与 suggest 74px 重叠；首次放灯连发两条同义文案 | toast 下移（桌面 118 / 手机 150），移除重复的 C11 toast |
+| 取景时 toast 不隐藏 | `.hidden` 的 opacity 被 `animation fill both` 覆盖 | 取景模式不渲染 toast，进入取景时清空 |
+| 猫形场景过暗、看不到猫/筐/橘子 | **猫模型 group 构建时 `visible=false`，进入猫形从未置 true**（逻辑在跑、画面全无）；且街面无补光 | `enterCat` 置 true、`exitCat` 置 false；猫区加暖色点光，猫/筐/橘子/矮棚提亮并加自发光 |
+| 放灯后自然视角看不到自己的灯 | 河灯在脚下 2.3m 水面，默认平视必然错过 | 入水后 1.2s 可打断的镜头下俯；入水点外推到 x=10.2；归属光晕加强；祝词浮字保留 |
+| 自动运镜覆盖玩家视角 | 调试 `lookAt` 不清 pan（真实鼠标移动本会取消） | `lookAt` 清除 pan，演出运镜保持可打断 |
+| 手机触控目标偏小 | 工具按钮 37×27 | 手机端按钮 ≥44px，HUD 加安全区 padding |
+
+复验结果（`apps/web/test-results/shangyuan/fixcheck-*`）：
+
+- 锁定后打开面板：`pointerLockElement` 由 CANVAS 变为 null，鼠标点击「点亮花灯」成功
+- 锁定态提示条：背景/描边/文字均为主题样式，非 UA 默认
+- 放灯：鼠标确认成功，1.5s 默认视角截图内可直接看到鱼龙灯/纸船灯 + 光晕 + 祝词
+- 取景：toast 为空
+- 猫形：`group.visible=true`，扑筐/上棚/完成全部通过，0 页面错误
+

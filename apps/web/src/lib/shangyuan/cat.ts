@@ -69,8 +69,16 @@ export class CatPrototype {
     this.events = events
 
     // --- cat: body + head + ears + tail, all warm grey against the night.
-    const fur = new THREE.MeshStandardMaterial({ color: 0x6b5a4e, roughness: 0.9 })
-    const dark = new THREE.MeshStandardMaterial({ color: 0x3d332c, roughness: 0.9 })
+    const fur = new THREE.MeshStandardMaterial({
+      color: 0x9a8471,
+      roughness: 0.85,
+      emissive: 0x140d08,
+    })
+    const dark = new THREE.MeshStandardMaterial({
+      color: 0x5e4c3c,
+      roughness: 0.9,
+      emissive: 0x0d0906,
+    })
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.11, 0.26, 4, 8), fur)
     body.rotation.z = Math.PI / 2
     body.position.y = 0.16
@@ -93,7 +101,11 @@ export class CatPrototype {
     this.group.add(this.cat)
 
     // --- basket: open cylinder that tips on pounce.
-    const bamboo = new THREE.MeshStandardMaterial({ color: 0xa8834f, roughness: 0.85 })
+    const bamboo = new THREE.MeshStandardMaterial({
+      color: 0xcf9f5e,
+      roughness: 0.7,
+      emissive: 0x2a1705,
+    })
     const basketMesh = new THREE.Mesh(
       new THREE.CylinderGeometry(0.3, 0.24, 0.55, 12, 1, true),
       bamboo,
@@ -114,9 +126,9 @@ export class CatPrototype {
 
     // --- tangerines hidden inside until the tip.
     const tangMat = new THREE.MeshStandardMaterial({
-      color: 0xe8862e,
-      roughness: 0.6,
-      emissive: 0x401c02,
+      color: 0xf29a3a,
+      roughness: 0.5,
+      emissive: 0x8a3c08,
     })
     for (let i = 0; i < TANGERINE_COUNT; i++) {
       const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), tangMat)
@@ -127,7 +139,11 @@ export class CatPrototype {
     }
 
     // --- shed: a 1.5 × 1.5 m landing 1.2 m up.
-    const wood = new THREE.MeshStandardMaterial({ color: 0x5c4632, roughness: 0.9 })
+    const wood = new THREE.MeshStandardMaterial({
+      color: 0x7a5c3e,
+      roughness: 0.85,
+      emissive: 0x120b05,
+    })
     this.shed = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.12, 1.6), wood)
     const [sx, sz] = toGame(zone.shed.x, zone.shed.y)
     this.shed.position.set(sx, groundZ + zone.shed.height, sz)
@@ -151,7 +167,7 @@ export class CatPrototype {
     const printMat = new THREE.MeshBasicMaterial({
       color: 0xffc477,
       transparent: true,
-      opacity: 0.14,
+      opacity: 0.3,
       depthWrite: false,
     })
     this.pawPrint = new THREE.Mesh(new THREE.CircleGeometry(0.32, 20), printMat)
@@ -159,6 +175,13 @@ export class CatPrototype {
     this.pawPrint.rotation.x = -Math.PI / 2
     this.pawPrint.position.set(px, groundZ + 0.03, pz)
     this.group.add(this.pawPrint)
+
+    // The street is dark at night; a local warm lamp keeps the cat, basket and
+    // tangerines readable (G0 feedback from the first playtest).
+    const [lx, lz] = toGame((zone.minX + zone.maxX) / 2, (zone.minY + zone.maxY) / 2)
+    const lamp = new THREE.PointLight(0xffc98a, 40, 11, 2)
+    lamp.position.set(lx, groundZ + 3.2, lz)
+    this.group.add(lamp)
 
     this.reset()
   }
@@ -183,7 +206,7 @@ export class CatPrototype {
       t.active = false
       t.mesh.visible = false
     }
-    ;(this.pawPrint.material as THREE.MeshBasicMaterial).opacity = 0.14
+    ;(this.pawPrint.material as THREE.MeshBasicMaterial).opacity = 0.3
     this.applyTransform()
     this.setMove(0, 0)
   }
@@ -360,7 +383,7 @@ export class CatPrototype {
     // The paw print breathes once the jump step is live.
     if (this.basketTipped && !this.onShed) {
       ;(this.pawPrint.material as THREE.MeshBasicMaterial).opacity =
-        0.35 + Math.sin(this.time * 3) * 0.15
+        0.55 + Math.sin(this.time * 3) * 0.2
     }
 
     this.applyTransform()

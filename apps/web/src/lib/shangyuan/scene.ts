@@ -97,7 +97,7 @@ type LanternRecord = {
 /** Constants for the owner-lantern slide-in (PRD §7.4: 0.3–1.5 s). */
 const SLIDE_TIME = 1.1
 const SHORE_X = 13.0
-const WATER_X = 11.2
+const WATER_X = 10.2
 /** Quay release point in Blender coords (x, y); the lantern enters here. */
 const RELEASE_SPOT = { x: 13.5, y: -86.4 }
 
@@ -180,6 +180,8 @@ export class ShangyuanScene {
   /** Wall-clock timestamp; releases are allowed again after it (PRD §7.5). */
   private cooldownUntil = 0
   private cooldownShown = 0
+  /** Clicks before this timestamp must not grab the pointer (panel close). */
+  private lockBlockUntil = 0
   private releasing = false
   private draftStyle = 0
   private draftBlessing = 0
@@ -269,10 +271,10 @@ export class ShangyuanScene {
         map: this.glow,
         color: 0xffd9a0,
         transparent: true,
-        opacity: 0.45,
+        opacity: 0.62,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
-        size: this.spriteSize(0.5),
+        size: this.spriteSize(0.68),
         sizeAttenuation: true,
       }),
     )
@@ -718,6 +720,15 @@ export class ShangyuanScene {
     // Photo mode accepts no scene input (PRD §7.6); the tap itself is the
     // mobile exit, handled by the component, and must not grab the pointer.
     if (this.photo) return
+    // While a panel is open every click belongs to the panel.  Requesting
+    // pointer lock here would capture the cursor and make the dialog
+    // unclickable — the blocker reported in the agent playtest.
+    if (this.panel) return
+    // A click that closes a panel must not immediately re-lock and swallow the
+    // next dialog's clicks.
+    if (performance.now() < this.lockBlockUntil) return
+    // Cat mode uses a fixed follow camera; no pointer lock needed.
+    if (this.catMode) return
     if (e.pointerType === 'mouse' && !this.pointerLocked) {
       void this.canvas.requestPointerLock?.()
       return
@@ -1464,8 +1475,19 @@ export class ShangyuanScene {
   }
 
   private openPanel(panel: Panel) {
+    // Release the captured cursor so the dialog is clickable with a mouse
+    // (PRD §4.1: closing a panel restores movement, not the lock).
+    this.releasePointer()
     this.panel = panel
     this.cb.onPanel(panel)
+  }
+
+  /** Free the mouse if the canvas holds a pointer lock. */
+  private releasePointer() {
+    if (document.pointerLockElement) {
+      document.exitPointerLock?.()
+      this.pointerLocked = false
+    }
   }
 
   private openReleasePanel() {
@@ -1618,6 +1640,8 @@ export class ShangyuanScene {
     if (!this.panel) return
     this.panel = null
     this.cb.onPanel(null)
+    // Swallow the click that closed the panel so it cannot re-lock the cursor.
+    this.lockBlockUntil = performance.now() + 400
   }
 
   private pushHud() {
@@ -1647,6 +1671,7 @@ export class ShangyuanScene {
   enterCat() {
     if (this.catMode || !this.cat) return
     if (this.panel || this.releasing) return
+    this.releasePointer()
     this.catSaved = {
       pos: this.player.clone(),
       yaw: this.yaw,
@@ -1655,6 +1680,7 @@ export class ShangyuanScene {
     }
     this.catMode = true
     this.catEnterT = 0
+    this.cat.group.visible = true
     this.cat.reset()
     this.viewTween = null
     this.pan = null
@@ -1666,6 +1692,7 @@ export class ShangyuanScene {
     if (!this.catMode) return
     this.catMode = false
     this.catEnterT = 1
+    if (this.cat) this.cat.group.visible = false
     const saved = this.catSaved
     if (saved) {
       this.player.copy(saved.pos)
@@ -1677,6 +1704,7 @@ export class ShangyuanScene {
     this.catSaved = null
     this.setTouch(0, 0)
     this.keys.clear()
+    this.lockBlockUntil = performance.now() + 400
     this.cb.onToast('回到人形，进度保留。')
     this.pushHud()
   }
@@ -1801,6 +1829,8 @@ export class ShangyuanScene {
 
   /** Debug helper: face a Blender (x, y) point from the current spot. */
   lookAt(x: number, y: number, height = 1.6) {
+    // Any deliberate look cancels an automatic pan.
+    this.pan = null
     if (this.catMode && this.cat) {
       // Steer the cat instead of the parked human camera.
       const p = this.cat.position
@@ -1831,10 +1861,9 @@ export class ShangyuanScene {
 
   togglePhoto(): boolean {
     this.photo = !this.photo
-    if (this.photo && document.pointerLockElement) {
+    if (this.photo) {
       // Framing mode needs the cursor for the exit tap (PRD §7.6).
-      document.exitPointerLock?.()
-      this.pointerLocked = false
+      this.releasePointer()
     }
     return this.photo
   }
@@ -2038,11 +2067,13 @@ export class ShangyuanScene {
       this.cooldownUntil = performance.now() + RELEASE.cooldown * 1000
       this.releasing = false
       this.releaseAnim = null
+      // Tilt briefly toward the water so the player sees their own lantern
+      // without hunting; any mouse look cancels it (PRD §7.4/§7.6).
+      this.panTo(new THREE.Vector3(WATER_X, 0.3, -RELEASE_SPOT.y), 1.2, -0.85, true)
       if (!this.released) {
         this.released = true
         this.phase = 'released'
         this.cb.onToast(`心愿已入河 ·「${anim.blessing}」`)
-        this.cb.onToast(COPY.C11)
         // The first success starts the show once, 3–5 s later (PRD §7.6).
         this.autoShow = 3.5
       } else {
@@ -2053,14 +2084,14 @@ export class ShangyuanScene {
   }
 
   /** A gentle, interruptible turn toward a moment worth watching (the show). */
-  private panTo(target: THREE.Vector3, seconds: number) {
-    if (this.idleClock < 1.2) return
+  private panTo(target: THREE.Vector3, seconds: number, minPitch = -0.25, force = false) {
+    if (!force && this.idleClock < 1.2) return
     const dx = target.x - this.player.x
     const dz = target.z - this.player.z
     const dy = target.y - this.player.y
     this.pan = {
       yaw: Math.atan2(dz, dx),
-      pitch: Math.max(-0.25, Math.min(0.32, Math.atan2(dy, Math.hypot(dx, dz)))),
+      pitch: Math.max(minPitch, Math.min(0.32, Math.atan2(dy, Math.hypot(dx, dz)))),
       t: seconds,
     }
   }
