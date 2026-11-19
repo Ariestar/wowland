@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
@@ -28,6 +29,7 @@ import { FireworkShell, FireworkSystem, IronFlower, type ShellKind } from './fir
 import { WaterlineFlora } from './flora'
 import { AmbientPetals } from './petals'
 import { gradingShader, sanitizeShader } from './postFx'
+import { PublicScenery } from './public-scenery'
 import type { Panel, Phase, Prompt, SceneCallbacks } from './types'
 import { batTexture, createWaterMaterial, glowTexture, skyLanternTexture } from './water'
 
@@ -115,6 +117,7 @@ export class ShangyuanScene {
   private flora: WaterlineFlora | null = null
   private readonly clock = new THREE.Clock()
   private readonly loader = new GLTFLoader()
+  private readonly ktx2: KTX2Loader
   private readonly audio = new ShangyuanAudio()
 
   private readonly waterMat: THREE.ShaderMaterial
@@ -131,6 +134,7 @@ export class ShangyuanScene {
   private readonly skyGlow: THREE.Texture
   private readonly fireworks: FireworkSystem
   private readonly petals: AmbientPetals
+  private readonly publicScenery: PublicScenery
   private skyLanterns: {
     points: THREE.Points
     positions: Float32Array
@@ -252,6 +256,10 @@ export class ShangyuanScene {
     const draco = new DRACOLoader()
     draco.setDecoderPath('/draco/')
     this.loader.setDRACOLoader(draco)
+    this.ktx2 = new KTX2Loader().setTranscoderPath('/basis/').detectSupport(this.renderer)
+    this.loader.setKTX2Loader(this.ktx2)
+    this.publicScenery = new PublicScenery(this.loader, this.renderer)
+    this.scene.add(this.publicScenery.object)
 
     this.camera = new THREE.PerspectiveCamera(48, 1, 0.1, 1800)
     this.camera.position.copy(this.player)
@@ -824,7 +832,7 @@ export class ShangyuanScene {
   // ---------------------------------------------------------------- loading
 
   async load() {
-    const total = 7
+    const total = 8
     let done = 0
     const tick = () => {
       done++
@@ -926,7 +934,9 @@ export class ShangyuanScene {
       tick()
     })
 
-    await Promise.all([layoutJob, worldJob, detailJob, ...templateJobs])
+    const sceneryJob = this.publicScenery.load().then(tick)
+
+    await Promise.all([layoutJob, worldJob, detailJob, sceneryJob, ...templateJobs])
     this.addGroundGlow()
     this.seedAmbientLanterns()
     this.buildCat()
@@ -1904,6 +1914,7 @@ export class ShangyuanScene {
         const count = object.userData.lanternCount
         return total + (typeof count === 'number' ? count : 0)
       }, 0),
+      publicScenery: this.publicScenery.stats(),
       ground: +this.playerGround.toFixed(2),
       reflection: Boolean(this.reflectionTarget),
       phase: this.phase,
@@ -2731,6 +2742,8 @@ export class ShangyuanScene {
     this.atmosphere.dispose(this.scene)
     this.flora?.dispose()
     this.petals.dispose()
+    this.publicScenery.dispose()
+    this.ktx2.dispose()
     this.audio.dispose()
     this.scene.traverse((o) => {
       const mesh = o as THREE.Mesh
