@@ -59,7 +59,7 @@ export class RiverAtmosphere {
   private readonly fireflies: THREE.Points
   private readonly fireflyPositions: Float32Array
   private readonly fireflyPhases: Float32Array
-  private readonly bats: THREE.Sprite[] = []
+  private bats: THREE.InstancedMesh | null = null
   private readonly batData: {
     cx: number
     cy: number
@@ -68,7 +68,11 @@ export class RiverAtmosphere {
     phase: number
     speed: number
     flap: number
+    size: number
   }[] = []
+  private readonly batMatrix = new THREE.Matrix4()
+  private readonly batPosition = new THREE.Vector3()
+  private readonly batScale = new THREE.Vector3()
   private time = 0
 
   constructor(glow: THREE.Texture, bat?: THREE.Texture) {
@@ -179,21 +183,27 @@ export class RiverAtmosphere {
     this.fireflies.frustumCulled = false
     this.object.add(this.fireflies)
 
-    // A small dusk flock above the canal. Sprites keep the silhouette soft and
-    // cost one draw call each; the flock stays high enough to clear the eaves.
+    // A small dusk flock above the canal.  Twelve sprites used to cost twelve
+    // draw calls; one InstancedMesh keeps the same camera-facing quads and
+    // per-bird flap while the flock stays a single call.
     if (bat) {
       const batCount = 12
+      const geometry = new THREE.PlaneGeometry(1, 1)
+      const material = new THREE.MeshBasicMaterial({
+        map: bat,
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.88,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      })
+      const mesh = new THREE.InstancedMesh(geometry, material, batCount)
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+      mesh.frustumCulled = false
+      mesh.userData.noGtao = true
+      mesh.count = batCount
       for (let i = 0; i < batCount; i++) {
-        const material = new THREE.SpriteMaterial({
-          map: bat,
-          color: 0xffffff,
-          transparent: true,
-          opacity: 0.88,
-          depthWrite: false,
-        })
-        const sprite = new THREE.Sprite(material)
         const scale = 0.9 + rng() * 0.7
-        sprite.scale.set(scale * 1.8, scale, 1)
         const cx = -18 + rng() * 36
         const cy = 8.5 + rng() * 8.0
         const cz = -110 + rng() * 260
@@ -201,14 +211,14 @@ export class RiverAtmosphere {
         const phase = rng() * Math.PI * 2
         const speed = 0.12 + rng() * 0.18
         const flap = rng() * Math.PI * 2
-        this.bats.push(sprite)
-        this.batData.push({ cx, cy, cz, r, phase, speed, flap })
-        this.object.add(sprite)
+        this.batData.push({ cx, cy, cz, r, phase, speed, flap, size: scale * 1.8 })
       }
+      this.bats = mesh
+      this.object.add(mesh)
     }
   }
 
-  update(dt: number) {
+  update(dt: number, camera?: THREE.Camera) {
     this.time += dt
     for (let i = 0; i < this.petalPhases.length; i++) {
       const p = i * 3
@@ -232,17 +242,21 @@ export class RiverAtmosphere {
       this.fireflyPositions[p + 2] += 0.02 * dt
       if (this.fireflyPositions[p + 2] > 182) this.fireflyPositions[p + 2] = -140
     }
-    for (let i = 0; i < this.bats.length; i++) {
-      const d = this.batData[i]
-      const sprite = this.bats[i]
-      const a = this.time * d.speed + d.phase
-      sprite.position.set(
-        d.cx + Math.cos(a) * d.r,
-        d.cy + Math.sin(this.time * 0.7 + d.flap) * 0.8,
-        d.cz + Math.sin(a) * d.r * 0.7,
-      )
-      const flap = 0.35 + Math.abs(Math.sin(this.time * 7.0 + d.flap)) * 0.65
-      sprite.scale.y = sprite.scale.x * 0.55 * flap
+    if (this.bats && camera) {
+      for (let i = 0; i < this.batData.length; i++) {
+        const d = this.batData[i]
+        const a = this.time * d.speed + d.phase
+        this.batPosition.set(
+          d.cx + Math.cos(a) * d.r,
+          d.cy + Math.sin(this.time * 0.7 + d.flap) * 0.8,
+          d.cz + Math.sin(a) * d.r * 0.7,
+        )
+        const flap = 0.35 + Math.abs(Math.sin(this.time * 7.0 + d.flap)) * 0.65
+        this.batScale.set(d.size, d.size * 0.55 * flap, 1)
+        this.batMatrix.compose(this.batPosition, camera.quaternion, this.batScale)
+        this.bats.setMatrixAt(i, this.batMatrix)
+      }
+      this.bats.instanceMatrix.needsUpdate = true
     }
     ;(this.petals.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true
     ;(this.mist.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true
@@ -257,10 +271,11 @@ export class RiverAtmosphere {
     ;(this.mist.material as THREE.Material).dispose()
     this.fireflies.geometry.dispose()
     ;(this.fireflies.material as THREE.Material).dispose()
-    const batMap = this.bats[0]?.material.map
-    for (const bat of this.bats) {
-      bat.material.dispose()
+    if (this.bats) {
+      const material = this.bats.material as THREE.MeshBasicMaterial
+      material.map?.dispose()
+      material.dispose()
+      this.bats.geometry.dispose()
     }
-    batMap?.dispose()
   }
 }

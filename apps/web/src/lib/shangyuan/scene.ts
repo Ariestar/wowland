@@ -36,6 +36,7 @@ const STEP_UP = 0.5
 const STEP_DOWN = 1.2
 /** Keep sub-steps shorter than the player radius so no obstacle can be tunnelled. */
 const MAX_SUBSTEP = 0.28
+const UP = new THREE.Vector3(0, 1, 0)
 
 /**
  * The mirrored world doubles the triangle count.  Phones and low-core machines
@@ -54,6 +55,33 @@ function reflectionBudget(): boolean {
 function highQuality(): boolean {
   if (window.matchMedia('(pointer: coarse)').matches) return false
   return (navigator.hardwareConcurrency ?? 8) >= 8
+}
+
+/**
+ * The river lanterns all share three small templates.  Cloning them produced
+ * one draw call per part per lantern; an InstancedMesh per template part keeps
+ * the same geometry, materials and per-lantern transforms in a single call.
+ */
+type LanternBatch = {
+  parts: {
+    geometry: THREE.BufferGeometry
+    material: THREE.Material
+    matrix: THREE.Matrix4
+  }[]
+  meshes: THREE.InstancedMesh[]
+  active: number
+}
+
+type LanternRecord = {
+  batch: LanternBatch
+  t: number
+  speed: number
+  lane: number
+  x: number
+  y: number
+  z: number
+  yaw: number
+  scale: number
 }
 
 export class ShangyuanScene {
@@ -91,17 +119,18 @@ export class ShangyuanScene {
     phases: Float32Array
     drifts: Float32Array
   } | null = null
-  private readonly towerGlow: THREE.Sprite[] = []
+  private towerGlowMaterial: THREE.PointsMaterial | null = null
   private readonly wheelPivots: THREE.Object3D[] = []
-  private readonly lanterns: {
-    obj: THREE.Object3D
-    halo: THREE.Sprite
-    t: number
-    speed: number
-    lane: number
-  }[] = []
+  private readonly lanternBatches = new Map<string, LanternBatch>()
+  private lanternHalo: THREE.Points | null = null
+  private readonly lanternHaloPositions = new Float32Array(70 * 3)
+  private readonly lanternMatrix = new THREE.Matrix4()
+  private readonly lanternPartMatrix = new THREE.Matrix4()
+  private readonly lanternQuat = new THREE.Quaternion()
+  private readonly lanternPos = new THREE.Vector3()
+  private readonly lanternScale = new THREE.Vector3()
+  private readonly lanterns: LanternRecord[] = []
   private readonly effects: Effect[] = []
-  private readonly lanternTemplates = new Map<string, THREE.Object3D>()
 
   private player = new THREE.Vector3(16.2, SCENE.groundZ + EYE, 124)
   private playerGround: number = SCENE.groundZ
@@ -753,6 +782,12 @@ export class ShangyuanScene {
       })
       this.tuneGlowMaterials(world)
       this.scene.add(world)
+      // The exported level never moves, so its transform hierarchy can skip
+      // the per-frame matrix sweep; only the water, lanterns and FX animate.
+      world.traverse((o) => {
+        o.matrixAutoUpdate = false
+        o.updateMatrix()
+      })
       this.prepareTower(world)
       tick()
     })
@@ -774,7 +809,7 @@ export class ShangyuanScene {
           if (std.name === 'SY_Paper') std.emissiveIntensity = 1.6
         }
       })
-      this.lanternTemplates.set(id, gltf.scene)
+      this.buildLanternBatch(id, gltf.scene)
       tick()
     })
 
@@ -1027,35 +1062,41 @@ export class ShangyuanScene {
   }
 
   private prepareTower(_root: THREE.Object3D) {
-    for (const y of [5, 10, 16, 22, 28]) {
-      const sprite = new THREE.Sprite(
-        new THREE.SpriteMaterial({
-          map: this.glow,
-          color: 0xffc98a,
-          transparent: true,
-          opacity: 0.12,
-          depthWrite: false,
-          blending: THREE.AdditiveBlending,
-        }),
-      )
-      sprite.position.set(0, y, -78)
-      sprite.scale.setScalar(6.2)
-      this.towerGlow.push(sprite)
-      this.scene.add(sprite)
-    }
+    // Five halo tiers used to be five sprites, i.e. five draw calls for a
+    // single soft glow.  One Points cloud keeps the same screen-facing discs
+    // and lets the show pulse all of them through one material.
+    const tiers = [5, 10, 16, 22, 28]
+    const positions = new Float32Array(tiers.length * 3)
+    tiers.forEach((y, i) => {
+      positions[i * 3] = 0
+      positions[i * 3 + 1] = y
+      positions[i * 3 + 2] = -78
+    })
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    this.towerGlowMaterial = new THREE.PointsMaterial({
+      map: this.glow,
+      color: 0xffc98a,
+      transparent: true,
+      opacity: 0.12,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      size: this.spriteSize(6.2),
+      sizeAttenuation: true,
+    })
+    const points = new THREE.Points(geometry, this.towerGlowMaterial)
+    points.frustumCulled = false
+    points.userData.noGtao = true
+    this.scene.add(points)
+  }
+
+  /** Points size that covers the same world height as a Sprite of this scale. */
+  private spriteSize(worldSize: number): number {
+    return worldSize / Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5))
   }
 
   /** Warm pools on the paving: cheap, and they do most of the "lit street" work. */
   private addGroundGlow() {
-    const geo = new THREE.PlaneGeometry(1, 1)
-    const mat = new THREE.MeshBasicMaterial({
-      map: this.glow,
-      color: 0xffb877,
-      transparent: true,
-      opacity: 0.2,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    })
     const pools: [number, number, number, number][] = []
     for (let y = -126; y <= 162; y += 16) {
       pools.push([16.4, y, 7, 0.16])
@@ -1063,14 +1104,113 @@ export class ShangyuanScene {
     }
     pools.push([0, 10, 12, 0.28])
     pools.push([0, 78, 16, 0.22])
-    for (const [x, y, size, opacity] of pools) {
-      const mesh = new THREE.Mesh(geo, mat.clone())
-      ;(mesh.material as THREE.MeshBasicMaterial).opacity = opacity
-      mesh.rotation.x = -Math.PI / 2
-      mesh.position.set(x, SCENE.groundZ + 0.03, -y)
-      mesh.scale.set(size, size, 1)
-      this.scene.add(mesh)
+
+    // One mesh with a vertex-colour alpha carries every pool, so the street
+    // lighting costs a single draw call instead of one per pool.
+    const plane = new THREE.PlaneGeometry(1, 1)
+    const srcPos = plane.attributes.position
+    const srcUv = plane.attributes.uv
+    const srcIndex = plane.index
+    if (!srcIndex) {
+      plane.dispose()
+      return
     }
+    const positions: number[] = []
+    const uvs: number[] = []
+    const colors: number[] = []
+    const indices: number[] = []
+    const tint = new THREE.Color(0xffb877)
+    const matrix = new THREE.Matrix4()
+    const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0))
+    const vertex = new THREE.Vector3()
+    for (const [x, y, size, opacity] of pools) {
+      const base = positions.length / 3
+      matrix.compose(
+        new THREE.Vector3(x, SCENE.groundZ + 0.03, -y),
+        quat,
+        new THREE.Vector3(size, size, 1),
+      )
+      for (let i = 0; i < srcPos.count; i++) {
+        vertex.fromBufferAttribute(srcPos, i).applyMatrix4(matrix)
+        positions.push(vertex.x, vertex.y, vertex.z)
+        uvs.push(srcUv.getX(i), srcUv.getY(i))
+        colors.push(tint.r, tint.g, tint.b, opacity)
+      }
+      for (let i = 0; i < srcIndex.count; i++) indices.push(srcIndex.getX(i) + base)
+    }
+    plane.dispose()
+
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 4))
+    geometry.setIndex(indices)
+    const material = new THREE.MeshBasicMaterial({
+      map: this.glow,
+      color: 0xffffff,
+      vertexColors: true,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    })
+    const mesh = new THREE.Mesh(geometry, material)
+    this.scene.add(mesh)
+  }
+
+  private buildLanternBatch(id: string, template: THREE.Object3D) {
+    template.updateMatrixWorld(true)
+    const inverse = template.matrixWorld.clone().invert()
+    const parts: LanternBatch['parts'] = []
+    template.traverse((o) => {
+      const mesh = o as THREE.Mesh
+      if (!mesh.isMesh) return
+      parts.push({
+        geometry: mesh.geometry,
+        material: mesh.material as THREE.Material,
+        matrix: new THREE.Matrix4().multiplyMatrices(inverse, mesh.matrixWorld),
+      })
+    })
+    const meshes = parts.map((part) => {
+      const mesh = new THREE.InstancedMesh(part.geometry, part.material, 70)
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+      mesh.count = 0
+      // Instances span the whole canal, so a single bounding sphere would
+      // always pass; one draw call is cheaper than a stale cull test.
+      mesh.frustumCulled = false
+      mesh.castShadow = false
+      mesh.receiveShadow = false
+      mesh.matrixAutoUpdate = false
+      mesh.updateMatrix()
+      this.scene.add(mesh)
+      return mesh
+    })
+    this.lanternBatches.set(id, { parts, meshes, active: 0 })
+    this.ensureLanternHalo()
+  }
+
+  private ensureLanternHalo() {
+    if (this.lanternHalo) return
+    const geometry = new THREE.BufferGeometry()
+    const attribute = new THREE.BufferAttribute(this.lanternHaloPositions, 3)
+    attribute.setUsage(THREE.DynamicDrawUsage)
+    geometry.setAttribute('position', attribute)
+    geometry.setDrawRange(0, 0)
+    this.lanternHalo = new THREE.Points(
+      geometry,
+      new THREE.PointsMaterial({
+        map: this.glow,
+        color: 0xffc477,
+        transparent: true,
+        opacity: 0.3,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        size: this.spriteSize(1.05),
+        sizeAttenuation: true,
+      }),
+    )
+    this.lanternHalo.frustumCulled = false
+    this.lanternHalo.userData.noGtao = true
+    this.scene.add(this.lanternHalo)
   }
 
   private seedAmbientLanterns() {
@@ -1082,35 +1222,22 @@ export class ShangyuanScene {
   }
 
   private spawnLantern(style: string, x: number, z: number, speed: number, ripple = false) {
-    const template = this.lanternTemplates.get(style)
-    if (!template) return
-    const obj = template.clone(true)
-    obj.position.set(x, 0.08, z)
-    obj.scale.setScalar(0.9 + Math.random() * 0.35)
-    this.scene.add(obj)
-    const halo = new THREE.Sprite(
-      new THREE.SpriteMaterial({
-        map: this.glow,
-        color: 0xffc477,
-        transparent: true,
-        opacity: 0.3,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-      }),
-    )
-    halo.position.set(x, 0.45, z)
-    halo.scale.setScalar(1.05)
-    this.scene.add(halo)
-    this.lanterns.push({ obj, halo, t: Math.random() * 10, speed, lane: z })
+    const batch = this.lanternBatches.get(style)
+    if (!batch) return
+    this.lanterns.push({
+      batch,
+      t: Math.random() * 10,
+      speed,
+      // The lane is the cross-canal coordinate the lantern drifts around.
+      lane: x,
+      x,
+      y: 0.08,
+      z,
+      yaw: 0,
+      scale: 0.9 + Math.random() * 0.35,
+    })
     if (ripple) this.effects.push(new Ripple(this.scene, new THREE.Vector3(x, 0, z)))
-    if (this.lanterns.length > 70) {
-      const old = this.lanterns.shift()
-      if (old) {
-        this.scene.remove(old.obj)
-        this.scene.remove(old.halo)
-        old.halo.material.dispose()
-      }
-    }
+    if (this.lanterns.length > 70) this.lanterns.shift()
   }
 
   // ---------------------------------------------------------------- interaction
@@ -1453,7 +1580,7 @@ export class ShangyuanScene {
     this.camera.lookAt(this.player.clone().add(dir))
 
     this.waterMat.uniforms.uTime.value += dt
-    this.atmosphere.update(dt)
+    this.atmosphere.update(dt, this.camera)
     this.flora?.update(dt)
     this.grading.uniforms.uTime.value += dt
 
@@ -1587,23 +1714,47 @@ export class ShangyuanScene {
     xs.fill(0)
     zs.fill(0)
     is.fill(0)
+    for (const batch of this.lanternBatches.values()) batch.active = 0
     for (let i = 0; i < this.lanterns.length; i++) {
       const l = this.lanterns[i]
       l.t += dt
-      l.obj.position.z += l.speed * dt
-      l.obj.position.x = l.lane + Math.sin(l.t * 0.7) * 0.55
-      l.obj.position.y = 0.08 + Math.sin(l.t * 1.6) * 0.03
-      l.obj.rotation.y = Math.sin(l.t * 0.4) * 0.3
-      l.halo.position.set(l.obj.position.x, 0.5, l.obj.position.z)
-      if (i < 12) {
-        xs[i] = l.obj.position.x
-        zs[i] = l.obj.position.z
-        is[i] = 0.8 + 0.2 * Math.sin(l.t * 2)
-      }
-      if (l.obj.position.z > 182) {
-        l.obj.position.z = -140
+      l.z += l.speed * dt
+      l.x = l.lane + Math.sin(l.t * 0.7) * 0.55
+      l.y = 0.08 + Math.sin(l.t * 1.6) * 0.03
+      l.yaw = Math.sin(l.t * 0.4) * 0.3
+      if (l.z > 182) {
+        l.z = -140
         l.t = Math.random() * 6
       }
+      const batch = l.batch
+      const slot = batch.active++
+      this.lanternPos.set(l.x, l.y, l.z)
+      this.lanternQuat.setFromAxisAngle(UP, l.yaw)
+      this.lanternScale.setScalar(l.scale)
+      this.lanternMatrix.compose(this.lanternPos, this.lanternQuat, this.lanternScale)
+      for (let p = 0; p < batch.meshes.length; p++) {
+        this.lanternPartMatrix.multiplyMatrices(this.lanternMatrix, batch.parts[p].matrix)
+        batch.meshes[p].setMatrixAt(slot, this.lanternPartMatrix)
+      }
+      this.lanternHaloPositions[i * 3] = l.x
+      this.lanternHaloPositions[i * 3 + 1] = 0.5
+      this.lanternHaloPositions[i * 3 + 2] = l.z
+      if (i < 12) {
+        xs[i] = l.x
+        zs[i] = l.z
+        is[i] = 0.8 + 0.2 * Math.sin(l.t * 2)
+      }
+    }
+    for (const batch of this.lanternBatches.values()) {
+      for (const mesh of batch.meshes) {
+        mesh.count = batch.active
+        mesh.instanceMatrix.needsUpdate = true
+      }
+    }
+    if (this.lanternHalo) {
+      const position = this.lanternHalo.geometry.getAttribute('position') as THREE.BufferAttribute
+      position.needsUpdate = true
+      this.lanternHalo.geometry.setDrawRange(0, this.lanterns.length)
     }
   }
 
@@ -1769,22 +1920,22 @@ export class ShangyuanScene {
     }
 
     this.towerPulse = t < 1.2 ? t / 1.2 : Math.max(0.25, 1 - (t - 1.2) / 24)
-    for (const s of this.towerGlow) {
-      // A halo behind the tiers, not a lamp in front of them: additive discs
-      // at full opacity erase the tower they are meant to light.
-      s.material.opacity = Math.min(0.32, 0.12 + this.towerPulse * 0.26)
-      s.scale.setScalar(6.2 + this.towerPulse * 2.4)
-    }
+    // A halo behind the tiers, not a lamp in front of them: additive discs
+    // at full opacity erase the tower they are meant to light.
+    this.setTowerGlow(Math.min(0.32, 0.12 + this.towerPulse * 0.26), 6.2 + this.towerPulse * 2.4)
     if (t > 26) {
       this.showClock = -1
       this.showStage = 0
       this.towerPulse = 0
-      for (const s of this.towerGlow) {
-        s.material.opacity = 0.12
-        s.scale.setScalar(6.2)
-      }
+      this.setTowerGlow(0.12, 6.2)
       this.pushHud()
     }
+  }
+
+  private setTowerGlow(opacity: number, size: number) {
+    if (!this.towerGlowMaterial) return
+    this.towerGlowMaterial.opacity = opacity
+    this.towerGlowMaterial.size = this.spriteSize(size)
   }
 
   /**
