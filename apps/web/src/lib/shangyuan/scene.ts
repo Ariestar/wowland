@@ -158,8 +158,9 @@ export class ShangyuanScene {
   private readonly s1FlameBase = new THREE.Vector3()
   private readonly s1TasselRotation = new THREE.Euler()
   private s1Igniting = -1
-  private s1Highlight = 0
   private carryLight: THREE.PointLight | null = null
+  private routeMarkers: THREE.Group | null = null
+  private routeMarkerMats: THREE.MeshBasicMaterial[] = []
   /** Floating blessing text above each fresh lantern (PRD §7.4). */
   private blessings: { sprite: THREE.Sprite; born: number }[] = []
   private readonly wheelPivots: THREE.Object3D[] = []
@@ -965,6 +966,7 @@ export class ShangyuanScene {
     this.seedAmbientLanterns()
     this.buildCat()
     this.buildMvpProps()
+    this.buildRouteGuide()
     tick()
     this.pushHud()
     this.worldReady = true
@@ -1075,6 +1077,39 @@ export class ShangyuanScene {
       }
     })
     return [...result]
+  }
+
+  private buildRouteGuide() {
+    const group = new THREE.Group()
+    group.name = 'S1_Route_Guide'
+    const points: [number, number][] = [
+      [16.4, -128],
+      [16.4, -125.8],
+      [16.4, -123.5],
+      [16.4, -119],
+      [16.2, -112],
+      [15.9, -106],
+    ]
+    const geometry = new THREE.CircleGeometry(0.17, 20)
+    points.forEach(([x, y], index) => {
+      const material = new THREE.MeshBasicMaterial({
+        color: index < 3 ? 0xffc47a : 0xffdca8,
+        map: this.glow,
+        transparent: true,
+        opacity: index < 3 ? 0.7 : 0.34,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      })
+      const marker = new THREE.Mesh(geometry, material)
+      marker.rotation.x = -Math.PI / 2
+      marker.position.set(x, SCENE.groundZ + 0.035 + index * 0.002, -y)
+      marker.scale.setScalar(index < 3 ? 1.15 : 0.9)
+      marker.userData.noGtao = true
+      group.add(marker)
+      this.routeMarkerMats.push(material)
+    })
+    this.routeMarkers = group
+    this.scene.add(group)
   }
 
   /**
@@ -1668,7 +1703,13 @@ export class ShangyuanScene {
           this.cb.onToast(COPY.claimedAgain)
           return
         }
-        this.startIgnition()
+        this.openPanel({
+          kind: 'claim',
+          title: COPY.claimTitle,
+          body: COPY.claimBody,
+          options: [{ label: COPY.claimConfirm }],
+          confirmLabel: COPY.claimConfirm,
+        })
         return
       case 'riddle':
         if (!this.claimed) {
@@ -1802,13 +1843,8 @@ export class ShangyuanScene {
     if (!option || option.disabled) return
 
     if (panel.kind === 'claim') {
-      this.claimed = true
-      this.claimAnim = 0
-      this.audio.chime(660)
-      this.cb.onToast(COPY.C03)
       this.closePanel()
-      this.panTo(new THREE.Vector3(MVP_S1.pos[0], SCENE.groundZ + 2.2, -MVP_S1.pos[1]), 1.2, -0.05, true)
-      this.pushHud()
+      this.startIgnition()
       return
     }
 
@@ -1914,6 +1950,7 @@ export class ShangyuanScene {
     if (this.s1Light) this.s1Light.intensity = 2.7
     if (this.carryLight) this.carryLight.intensity = 0.75
     this.cb.onToast(COPY.C03)
+    this.cb.onToast(COPY.routeRiddle)
     this.panTo(new THREE.Vector3(MVP_S1.pos[0], SCENE.groundZ + 2.2, -MVP_S1.pos[1]), 1.2, -0.05, true)
     this.pushHud()
   }
@@ -1948,21 +1985,10 @@ export class ShangyuanScene {
   }
 
   private updateS1Feedback(dt: number) {
-    const active = this.nearby === 'entrance' && !this.panel && !this.claimed
-    const target = active ? 1 : 0
-    const blend = Math.min(1, dt * 6)
-    this.s1Highlight += (target - this.s1Highlight) * blend
-    if (this.s1Outline) {
-      this.s1Outline.visible = this.s1Highlight > 0.03
-      const material = (this.s1Outline as THREE.Mesh).material as THREE.MeshBasicMaterial | undefined
-      if (material?.transparent) material.opacity = 0.18 + this.s1Highlight * 0.42
-      this.s1Outline.scale.setScalar(1 + this.s1Highlight * 0.035)
-    }
+    if (this.s1Outline) this.s1Outline.visible = false
     if (this.s1Wick) {
       const material = this.s1Wick.material as THREE.MeshStandardMaterial
-      if (material.isMeshStandardMaterial) {
-        material.emissiveIntensity = 0.04 + this.s1Highlight * 0.55
-      }
+      if (material.isMeshStandardMaterial) material.emissiveIntensity = 0.04
     }
     if (this.s1Tassel && this.s1Igniting < 0) {
       const sway = this.claimed ? 0.045 : 0.018
@@ -1973,6 +1999,15 @@ export class ShangyuanScene {
       this.carryLight.position.copy(this.player)
       this.carryLight.position.y -= 0.35
     }
+
+    const phase = performance.now() * 0.0018
+    this.routeMarkerMats.forEach((material, index) => {
+      const active = this.claimed ? index >= 3 : index < 3
+      const base = active ? 0.46 : 0.12
+      material.opacity = active
+        ? base + Math.max(0, Math.sin(phase - index * 0.65)) * 0.4
+        : base
+    })
   }
 
   private pushHud() {

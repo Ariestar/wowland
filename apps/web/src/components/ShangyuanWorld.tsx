@@ -243,7 +243,7 @@ export default function ShangyuanWorld({ language }: Props) {
             ? '去爪印处，跃上矮棚。'
             : '走近竹筐，试着扑一下。'
     }
-    if (!hud.claimed) return '走到灯案前，点亮你的花灯。'
+    if (!hud.claimed) return '沿地面灯带走到木案前；看到提示后按 E，或点“交互”。'
     if (!hud.riddleSolved) return '到灯谜摊猜一道谜。'
     if (!hud.released) return '去埠头选一盏河灯，留一句愿。'
     return '心愿已入河，继续逛逛吧。'
