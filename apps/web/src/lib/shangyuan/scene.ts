@@ -1951,7 +1951,12 @@ export class ShangyuanScene {
     if (this.carryLight) this.carryLight.intensity = 0.75
     this.cb.onToast(COPY.C03)
     this.cb.onToast(COPY.routeRiddle)
-    this.panTo(new THREE.Vector3(MVP_S1.pos[0], SCENE.groundZ + 2.2, -MVP_S1.pos[1]), 1.2, -0.05, true)
+    this.panTo(
+      new THREE.Vector3(MVP_S1.pos[0], SCENE.groundZ + 2.2, -MVP_S1.pos[1]),
+      1.2,
+      -0.05,
+      true,
+    )
     this.pushHud()
   }
 
@@ -2004,9 +2009,7 @@ export class ShangyuanScene {
     this.routeMarkerMats.forEach((material, index) => {
       const active = this.claimed ? index >= 3 : index < 3
       const base = active ? 0.46 : 0.12
-      material.opacity = active
-        ? base + Math.max(0, Math.sin(phase - index * 0.65)) * 0.4
-        : base
+      material.opacity = active ? base + Math.max(0, Math.sin(phase - index * 0.65)) * 0.4 : base
     })
   }
 
