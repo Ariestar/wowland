@@ -115,11 +115,12 @@ export function createWaterMaterial(surfaceAlpha = 0.8) {
         // mirror into streaks instead of a hard copy of the facades.
         if (uReflectionStrength > 0.001) {
           vec2 ruv = vReflectionUv.xy / vReflectionUv.w;
-          ruv += vec2(w, w2) * 0.0006;
+          ruv += vec2(w, w2) * 0.0014;
           vec3 refl = texture2D(uReflection, ruv).rgb;
-          // Add the mirror on top of the painted streaks; replacing them made
-          // the far canal read as flat blue.
-          col += refl * vec3(1.08, 0.98, 0.9) * uReflectionStrength * (0.18 + 0.30 * fresnel);
+          // Keep the painted lantern streaks underneath and add a clear
+          // mirrored copy of the facades above them, strongest at grazing
+          // angles where a real river behaves like a dark mirror.
+          col += refl * vec3(1.15, 1.04, 0.94) * uReflectionStrength * (0.44 + 0.55 * fresnel);
         }
 
         // Moon glitter: a narrow, broken path rather than a mirror disc.
