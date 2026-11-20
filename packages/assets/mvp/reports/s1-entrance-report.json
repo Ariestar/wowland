@@ -1,0 +1,197 @@
+{
+  "asset_id": "S1-Entrance",
+  "version": "1.0.0",
+  "source": "packages/assets/mvp/scripts/build_s1_entrance.py",
+  "runtime_glb": "apps/web/public/models/mvp/s1-entrance.glb",
+  "axes": "authored Z-up metres; exported glTF Y-up with applied transforms",
+  "pivot": "ground under the keeper table",
+  "bounds_m": {
+    "min": [
+      -1.05,
+      -1.718,
+      0.0
+    ],
+    "max": [
+      1.49,
+      0.75,
+      3.105
+    ]
+  },
+  "dimensions_m": [
+    2.54,
+    2.468,
+    3.105
+  ],
+  "triangles": 6938,
+  "vertices": 3615,
+  "textures": [
+    "packages/assets/mvp/textures/T_S1_LingDengRuShi.png",
+    "packages/assets/mvp/textures/T_S1_Wayfinder.png"
+  ],
+  "hero_parts": {
+    "S1_HeroLantern_Frame": [
+      "S1_HeroLantern_Crown",
+      "S1_HeroLantern_CrownRing",
+      "S1_HeroLantern_HangerLoop",
+      "S1_HeroLantern_HangerTop",
+      "S1_HeroLantern_Post_0",
+      "S1_HeroLantern_Post_1",
+      "S1_HeroLantern_Post_2",
+      "S1_HeroLantern_Post_3",
+      "S1_HeroLantern_Skirt",
+      "S1_HeroLantern_SkirtRing"
+    ],
+    "S1_HeroLantern_Paper": [
+      "S1_HeroLantern_PaperMesh",
+      "S1_HeroLantern_Seal_0",
+      "S1_HeroLantern_Seal_1"
+    ],
+    "S1_HeroLantern_Wick": [
+      "S1_HeroLantern_WickMesh"
+    ],
+    "S1_HeroLantern_Flame": [
+      "S1_HeroLantern_FlameMesh"
+    ],
+    "S1_HeroLantern_Tassel": [
+      "S1_HeroLantern_TasselCap",
+      "S1_HeroLantern_TasselStrand_0",
+      "S1_HeroLantern_TasselStrand_1",
+      "S1_HeroLantern_TasselStrand_2",
+      "S1_HeroLantern_TasselStrand_3",
+      "S1_HeroLantern_TasselStrand_4"
+    ],
+    "S1_HeroLantern_Outline": [
+      "S1_HeroLantern_OutlineMesh"
+    ]
+  },
+  "named_groups": [
+    "S1_Sign_Main",
+    "S1_Sign_Wayfinder",
+    "S1_GuideLantern"
+  ],
+  "hero_part_bounds": {
+    "S1_HeroLantern_Frame": {
+      "min": [
+        0.04,
+        0.12,
+        0.85
+      ],
+      "max": [
+        0.04,
+        0.12,
+        0.85
+      ]
+    },
+    "S1_HeroLantern_Paper": {
+      "min": [
+        0.04,
+        0.12,
+        0.85
+      ],
+      "max": [
+        0.04,
+        0.12,
+        0.85
+      ]
+    },
+    "S1_HeroLantern_Wick": {
+      "min": [
+        0.04,
+        0.12,
+        0.79
+      ],
+      "max": [
+        0.04,
+        0.12,
+        0.79
+      ]
+    },
+    "S1_HeroLantern_Flame": {
+      "min": [
+        0.04,
+        0.12,
+        0.815
+      ],
+      "max": [
+        0.04,
+        0.12,
+        0.815
+      ]
+    },
+    "S1_HeroLantern_Tassel": {
+      "min": [
+        0.04,
+        0.12,
+        0.16
+      ],
+      "max": [
+        0.04,
+        0.12,
+        0.16
+      ]
+    },
+    "S1_HeroLantern_Outline": {
+      "min": [
+        0.04,
+        0.12,
+        0.85
+      ],
+      "max": [
+        0.04,
+        0.12,
+        0.85
+      ]
+    }
+  },
+  "recommended_collision": {
+    "table": {
+      "center": [
+        0,
+        0,
+        0.45
+      ],
+      "size": [
+        1.9,
+        0.92,
+        0.9
+      ]
+    },
+    "upright": {
+      "center": [
+        -0.68,
+        0.12,
+        0.8
+      ],
+      "size": [
+        0.14,
+        0.16,
+        1.6
+      ]
+    },
+    "sign_post": {
+      "center": [
+        0.82,
+        0.62,
+        0.86
+      ],
+      "size": [
+        0.14,
+        0.14,
+        1.72
+      ]
+    }
+  },
+  "export": {
+    "recommended_runtime_root_rotation_y": 0.0,
+    "format": "GLB",
+    "export_yup": true,
+    "apply_transforms": true,
+    "materials": "exported with embedded image textures"
+  },
+  "notes": [
+    "Hero lantern is unlit by default; runtime animates FLAME scale and PAPER emission.",
+    "Outline mesh is hidden by default and should become visible on proximity highlight.",
+    "S1_GuideLantern is off by default; runtime raises MAT_S1_GuideLantern_Paper emission after claiming.",
+    "Preview-only camera, lights and ground are excluded from the GLB."
+  ]
+}

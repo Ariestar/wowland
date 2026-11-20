@@ -19,6 +19,7 @@ import {
   INTERACTABLES,
   type InteractableId,
   LANTERN_STYLES,
+  MVP_S1,
   RELEASE,
   RIDDLE,
   SCENE,
@@ -146,6 +147,20 @@ export class ShangyuanScene {
   private claimLanternMat: THREE.MeshStandardMaterial | null = null
   private markerLanternMat: THREE.MeshStandardMaterial | null = null
   private claimAnim = -1
+  private s1Model: THREE.Object3D | null = null
+  private s1Paper: THREE.Mesh[] = []
+  private s1Wick: THREE.Mesh | null = null
+  private s1Flame: THREE.Object3D | null = null
+  private s1Tassel: THREE.Object3D | null = null
+  private s1Outline: THREE.Object3D | null = null
+  private s1Guide: THREE.Object3D | null = null
+  private s1Light: THREE.PointLight | null = null
+  private readonly s1FlameBase = new THREE.Vector3()
+  private readonly s1TasselRotation = new THREE.Euler()
+  private s1Igniting = -1
+  private carryLight: THREE.PointLight | null = null
+  private routeMarkers: THREE.Group | null = null
+  private routeMarkerMats: THREE.MeshBasicMaterial[] = []
   /** Floating blessing text above each fresh lantern (PRD §7.4). */
   private blessings: { sprite: THREE.Sprite; born: number }[] = []
   private readonly wheelPivots: THREE.Object3D[] = []
@@ -733,6 +748,12 @@ export class ShangyuanScene {
     this.dragging = false
   }
 
+  private releaseInput() {
+    this.keys.clear()
+    this.setTouch(0, 0)
+    this.dragging = false
+  }
+
   private onVisibilityChange = () => {
     if (document.hidden) this.haltInput()
   }
@@ -935,17 +956,160 @@ export class ShangyuanScene {
     })
 
     const sceneryJob = this.publicScenery.load().then(tick)
+    const s1Job = this.loader.loadAsync(MVP_S1.model).then((gltf) => {
+      this.installS1(gltf.scene)
+      tick()
+    })
 
-    await Promise.all([layoutJob, worldJob, detailJob, sceneryJob, ...templateJobs])
+    await Promise.all([layoutJob, worldJob, detailJob, sceneryJob, s1Job, ...templateJobs])
     this.addGroundGlow()
     this.seedAmbientLanterns()
     this.buildCat()
     this.buildMvpProps()
+    this.buildRouteGuide()
     tick()
     this.pushHud()
     this.worldReady = true
     this.cb.onReady()
     this.loop()
+  }
+
+  private installS1(root: THREE.Object3D) {
+    root.name = 'S1_Entrance_Props'
+    root.position.set(MVP_S1.pos[0], SCENE.groundZ, -MVP_S1.pos[1])
+    root.rotation.y = 0
+    root.traverse((object) => {
+      const mesh = object as THREE.Mesh
+      if (!mesh.isMesh) return
+      mesh.castShadow = true
+      mesh.receiveShadow = true
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      for (const material of materials) {
+        const standard = material as THREE.MeshStandardMaterial
+        if (standard.isMeshStandardMaterial) standard.envMapIntensity = 0.9
+      }
+    })
+
+    const findNode = (name: string, fallback?: string) => {
+      let found: THREE.Object3D | undefined
+      root.traverse((object) => {
+        const matches =
+          object.name === name || object.name === fallback || object.name.endsWith(`_${name}`)
+        if (found === undefined && matches) found = object
+      })
+      return found ?? null
+    }
+    const collectMeshes = (node: THREE.Object3D | null) => {
+      const result: THREE.Mesh[] = []
+      node?.traverse((object) => {
+        const mesh = object as THREE.Mesh
+        if (mesh.isMesh) result.push(mesh)
+      })
+      return result
+    }
+
+    this.s1Paper = collectMeshes(findNode('S1_HeroLantern_Paper', 'S1_HeroLantern_PaperMesh'))
+    this.s1Wick =
+      collectMeshes(findNode('S1_HeroLantern_Wick', 'S1_HeroLantern_WickMesh'))[0] ?? null
+    this.s1Flame = findNode('S1_HeroLantern_Flame', 'S1_HeroLantern_FlameMesh')
+    this.s1Tassel = findNode('S1_HeroLantern_Tassel', 'S1_HeroLantern_TasselCap')
+    this.s1Outline = findNode('S1_HeroLantern_Outline', 'S1_HeroLantern_OutlineMesh')
+    this.s1Guide = findNode('S1_GuideLantern', 'S1_GuideLantern_Paper')
+
+    if (this.s1Flame) {
+      this.s1FlameBase.copy(this.s1Flame.scale)
+      this.s1Flame.scale.setScalar(0.001)
+      this.s1Flame.visible = false
+    }
+    if (this.s1Tassel) this.s1TasselRotation.copy(this.s1Tassel.rotation)
+    if (this.s1Outline) {
+      this.s1Outline.visible = false
+      this.s1Outline.userData.noGtao = true
+    }
+    for (const material of this.s1PaperMaterials()) {
+      const standard = material as THREE.MeshStandardMaterial
+      standard.emissive.setRGB(0.02, 0.014, 0.007)
+      standard.color.set('#b8a988')
+      standard.emissiveIntensity = 0.06
+    }
+    for (const material of this.guideMaterials()) material.emissiveIntensity = 0.05
+
+    this.s1Light = new THREE.PointLight(0xffb66a, 0.32, 5.4, 2)
+    this.s1Light.position.set(MVP_S1.pos[0] + 0.25, SCENE.groundZ + 2.25, -MVP_S1.pos[1] + 0.35)
+    this.scene.add(this.s1Light)
+    this.carryLight = new THREE.PointLight(0xffc27c, 0, 4.5, 2)
+    this.scene.add(this.carryLight)
+    this.scene.add(root)
+    this.s1Model = root
+    this.obstacleField?.add({
+      name: 'S1_LanternTable',
+      kind: 'prop',
+      x: MVP_S1.pos[0],
+      y: MVP_S1.pos[1],
+      hx: MVP_S1.collider.hx,
+      hy: MVP_S1.collider.hy,
+      top: SCENE.groundZ + MVP_S1.collider.top,
+      rot: 0,
+    })
+  }
+
+  private s1PaperMaterials(): THREE.MeshStandardMaterial[] {
+    const result = new Set<THREE.MeshStandardMaterial>()
+    for (const mesh of this.s1Paper) {
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      for (const material of materials) {
+        const standard = material as THREE.MeshStandardMaterial
+        if (standard.isMeshStandardMaterial) result.add(standard)
+      }
+    }
+    return [...result]
+  }
+
+  private guideMaterials(): THREE.MeshStandardMaterial[] {
+    const result = new Set<THREE.MeshStandardMaterial>()
+    this.s1Guide?.traverse((object) => {
+      const mesh = object as THREE.Mesh
+      if (!mesh.isMesh) return
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      for (const material of materials) {
+        const standard = material as THREE.MeshStandardMaterial
+        if (standard.isMeshStandardMaterial) result.add(standard)
+      }
+    })
+    return [...result]
+  }
+
+  private buildRouteGuide() {
+    const group = new THREE.Group()
+    group.name = 'S1_Route_Guide'
+    const points: [number, number][] = [
+      [16.4, -128],
+      [16.4, -125.8],
+      [16.4, -123.5],
+      [16.4, -119],
+      [16.2, -112],
+      [15.9, -106],
+    ]
+    const geometry = new THREE.CircleGeometry(0.17, 20)
+    points.forEach(([x, y], index) => {
+      const material = new THREE.MeshBasicMaterial({
+        color: index < 3 ? 0xffc47a : 0xffdca8,
+        map: this.glow,
+        transparent: true,
+        opacity: index < 3 ? 0.7 : 0.34,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      })
+      const marker = new THREE.Mesh(geometry, material)
+      marker.rotation.x = -Math.PI / 2
+      marker.position.set(x, SCENE.groundZ + 0.035 + index * 0.002, -y)
+      marker.scale.setScalar(index < 3 ? 1.15 : 0.9)
+      marker.userData.noGtao = true
+      group.add(marker)
+      this.routeMarkerMats.push(material)
+    })
+    this.routeMarkers = group
+    this.scene.add(group)
   }
 
   /**
@@ -964,12 +1128,12 @@ export class ShangyuanScene {
         opacity: 0.94,
       })
 
-    // A03 claim lantern: unlit until the player claims it (PRD §5.1).
+    // A03 is now the authored S1 scene; keep the pole as the keeper's hanging stake.
     const claimMat = paper(0.06)
     this.claimLanternMat = claimMat
     const lanternGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.34, 10)
     const claimLantern = new THREE.Mesh(lanternGeo, claimMat)
-    claimLantern.position.set(15.6, SCENE.groundZ + 1.05, 122.4)
+    claimLantern.visible = false
     claimLantern.castShadow = true
     const pole = new THREE.Mesh(
       new THREE.CylinderGeometry(0.045, 0.055, 1.6, 8),
@@ -1541,9 +1705,10 @@ export class ShangyuanScene {
         }
         this.openPanel({
           kind: 'claim',
-          title: '灯门',
-          body: '守灯人递来一盏素纸花灯。「提着它，去灯谜摊猜一道谜。」',
-          options: [{ label: COPY.C02 }],
+          title: COPY.claimTitle,
+          body: COPY.claimBody,
+          options: [{ label: COPY.claimConfirm }],
+          confirmLabel: COPY.claimConfirm,
         })
         return
       case 'riddle':
@@ -1678,14 +1843,8 @@ export class ShangyuanScene {
     if (!option || option.disabled) return
 
     if (panel.kind === 'claim') {
-      this.claimed = true
-      this.claimAnim = 0
-      this.audio.chime(660)
-      this.cb.onToast(COPY.C03)
       this.closePanel()
-      // Turn briefly to the fresh lantern so the light-up is the focal moment.
-      this.panTo(new THREE.Vector3(15.6, SCENE.groundZ + 1.05, 122.4), 1.2, -0.05, true)
-      this.pushHud()
+      this.startIgnition()
       return
     }
 
@@ -1761,6 +1920,97 @@ export class ShangyuanScene {
     this.cb.onPanel(null)
     // Swallow the click that closed the panel so it cannot re-lock the cursor.
     this.lockBlockUntil = performance.now() + 400
+  }
+
+  private startIgnition() {
+    if (!this.s1Model) {
+      this.cb.onToast('灯案还在加载，请稍后再试')
+      return
+    }
+    this.s1Igniting = 0
+    this.releaseInput()
+    this.audio.ignite()
+    this.cb.onPrompt(null)
+  }
+
+  private finishIgnition() {
+    this.s1Igniting = -1
+    this.claimed = true
+    this.claimAnim = 0
+    if (this.s1Flame) {
+      this.s1Flame.visible = true
+      this.s1Flame.scale.copy(this.s1FlameBase)
+    }
+    for (const material of this.s1PaperMaterials()) {
+      material.emissive.set('#ffb34d')
+      material.color.set('#ffe7bd')
+      material.emissiveIntensity = 2.4
+    }
+    for (const material of this.guideMaterials()) material.emissiveIntensity = 2.1
+    if (this.s1Light) this.s1Light.intensity = 2.7
+    if (this.carryLight) this.carryLight.intensity = 0.75
+    this.cb.onToast(COPY.C03)
+    this.cb.onToast(COPY.routeRiddle)
+    this.panTo(
+      new THREE.Vector3(MVP_S1.pos[0], SCENE.groundZ + 2.2, -MVP_S1.pos[1]),
+      1.2,
+      -0.05,
+      true,
+    )
+    this.pushHud()
+  }
+
+  private updateIgnition(dt: number) {
+    if (this.s1Igniting < 0) return
+    this.s1Igniting = Math.min(1.05, this.s1Igniting + dt)
+    const progress = Math.min(1, this.s1Igniting / 1.05)
+    const eased = progress * progress * (3 - 2 * progress)
+    if (this.s1Flame) {
+      this.s1Flame.visible = true
+      const flicker = 1 + Math.sin(this.s1Igniting * 38) * 0.08 * eased
+      this.s1Flame.scale.set(
+        this.s1FlameBase.x * eased * flicker,
+        this.s1FlameBase.y * eased * flicker,
+        this.s1FlameBase.z * eased * flicker,
+      )
+    }
+    for (const material of this.s1PaperMaterials()) {
+      material.emissiveIntensity = 0.06 + 2.34 * eased
+      if (eased > 0.2) {
+        material.emissive.set('#ffb34d')
+        material.color.set('#ffe7bd')
+      }
+    }
+    for (const material of this.guideMaterials()) {
+      material.emissiveIntensity = 0.05 + 2.05 * eased
+    }
+    if (this.s1Light) this.s1Light.intensity = 0.32 + 2.38 * eased
+    if (this.carryLight) this.carryLight.intensity = 0.75 * eased
+    if (progress >= 1) this.finishIgnition()
+  }
+
+  private updateS1Feedback(dt: number) {
+    if (this.s1Outline) this.s1Outline.visible = false
+    if (this.s1Wick) {
+      const material = this.s1Wick.material as THREE.MeshStandardMaterial
+      if (material.isMeshStandardMaterial) material.emissiveIntensity = 0.04
+    }
+    if (this.s1Tassel && this.s1Igniting < 0) {
+      const sway = this.claimed ? 0.045 : 0.018
+      this.s1Tassel.rotation.z =
+        this.s1TasselRotation.z + Math.sin(performance.now() * 0.0016) * sway
+    }
+    if (this.carryLight) {
+      this.carryLight.position.copy(this.player)
+      this.carryLight.position.y -= 0.35
+    }
+
+    const phase = performance.now() * 0.0018
+    this.routeMarkerMats.forEach((material, index) => {
+      const active = this.claimed ? index >= 3 : index < 3
+      const base = active ? 0.46 : 0.12
+      material.opacity = active ? base + Math.max(0, Math.sin(phase - index * 0.65)) * 0.4 : base
+    })
   }
 
   private pushHud() {
@@ -2074,9 +2324,11 @@ export class ShangyuanScene {
     this.updateShow(eventDt)
     this.updateAmbientFireworks(dt)
     this.updateEffects(dt)
+    this.updateIgnition(dt)
     this.updateNearby()
     this.updateRelease(eventDt)
     this.updateProps(dt)
+    this.updateS1Feedback(dt)
   }
 
   /** Lamp state ramps: the claim lantern lights over ~1 s (PRD §5.2). */
@@ -2266,7 +2518,7 @@ export class ShangyuanScene {
   }
 
   private move(dt: number) {
-    if (this.panel) return
+    if (this.panel || this.s1Igniting >= 0) return
     let f = (this.keys.has('KeyW') ? 1 : 0) - (this.keys.has('KeyS') ? 1 : 0)
     let r = (this.keys.has('KeyD') ? 1 : 0) - (this.keys.has('KeyA') ? 1 : 0)
     if (this.touchMove || this.touchStrafe) {
@@ -2657,6 +2909,7 @@ export class ShangyuanScene {
       this.updateCatNearby()
       return
     }
+    if (this.s1Igniting >= 0) return
     let best: InteractableId | null = null
     let bestD = Infinity
     for (const it of INTERACTABLES) {

@@ -70,6 +70,15 @@ export class ShangyuanAudio {
     this.tone(freq * 1.5, 0.9, 'sine', 0.07, 0.02)
   }
 
+  /** S01: a soft wick strike with a short, bright tail. */
+  ignite() {
+    this.unlock()
+    this.tone(392, 0.42, 'triangle', 0.1)
+    this.tone(784, 0.7, 'sine', 0.13, 0.045)
+    this.tone(1176, 0.55, 'sine', 0.06, 0.1)
+    this.crackle(0.24, 0.32)
+  }
+
   thud() {
     this.unlock()
     this.tone(150, 0.28, 'triangle', 0.12)
