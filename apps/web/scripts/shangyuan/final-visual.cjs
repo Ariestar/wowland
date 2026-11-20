@@ -32,7 +32,15 @@ async function measureOfficialVisibility(page) {
     const group = app?.publicScenery?.object
     if (!camera || !group) return null
     camera.updateMatrixWorld()
-    const visible = { sakura: 0, willow: 0, bamboo: 0, pavilions: 0, corridors: 0 }
+    const visible = {
+      sakura: 0,
+      willow: 0,
+      bamboo: 0,
+      grass: 0,
+      shrubs: 0,
+      pavilions: 0,
+      corridors: 0,
+    }
     group.traverse((object) => {
       if (!object.isMesh || !object.name.startsWith('AwcScenery_')) return
       const kind = object.name.slice('AwcScenery_'.length)
@@ -102,7 +110,15 @@ async function analyseScreenshot(page, buffer) {
     const url = response.url()
     if (url.includes('blossom_petal.jpg')) assetResponses.petal = response.status()
     if (url.includes('SM_Prop_Lantern_Hung_01.glb')) assetResponses.kitLantern = response.status()
-    for (const name of ['sakura-tree', 'willow', 'bamboo', 'wood-pavilion', 'crossing-corridor']) {
+    for (const name of [
+      'sakura-tree',
+      'willow',
+      'bamboo',
+      'grass-clump',
+      'shrub',
+      'wood-pavilion',
+      'crossing-corridor',
+    ]) {
       if (url.includes(`/library/${name}.glb`)) assetResponses[name] = response.status()
     }
     if (url.includes('basis_transcoder')) assetResponses.basis = response.status()
@@ -159,6 +175,8 @@ async function analyseScreenshot(page, buffer) {
       'sakura-tree',
       'willow',
       'bamboo',
+      'grass-clump',
+      'shrub',
       'wood-pavilion',
       'crossing-corridor',
     ].every((name) => assetResponses[name] === 200),
@@ -170,6 +188,8 @@ async function analyseScreenshot(page, buffer) {
         scenery.sakura >= 4 &&
         scenery.willow >= 3 &&
         scenery.bamboo >= 8 &&
+        scenery.grass >= 8 &&
+        scenery.shrubs >= 3 &&
         scenery.pavilions >= 1 &&
         scenery.corridors >= 3
       )
@@ -181,6 +201,8 @@ async function analyseScreenshot(page, buffer) {
         visible.sakura > 0 &&
         visible.willow > 0 &&
         visible.bamboo > 0 &&
+        visible.grass > 0 &&
+        visible.shrubs > 0 &&
         visible.pavilions > 0 &&
         visible.corridors > 0
       )

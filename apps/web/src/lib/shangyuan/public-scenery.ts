@@ -22,6 +22,8 @@ export type PublicSceneryStats = {
   sakura: number
   willow: number
   bamboo: number
+  grass: number
+  shrubs: number
   pavilions: number
   corridors: number
 }
@@ -58,6 +60,8 @@ export class PublicScenery {
     sakura: 0,
     willow: 0,
     bamboo: 0,
+    grass: 0,
+    shrubs: 0,
     pavilions: 0,
     corridors: 0,
   }
@@ -84,9 +88,9 @@ export class PublicScenery {
       this.loadPlants(
         'willow.glb',
         [
-          sceneSpot(13.5, -124, 4.2, 0.1, 1.2, 1.1),
-          sceneSpot(14.9, -108, 5.0, -0.2, 1.2, 1.1),
-          sceneSpot(-14.9, -108, 5.3, 0.3, 1.2, 1.1),
+          sceneSpot(13.5, -124, 3.0, 0.1, 1.2, 1.1),
+          sceneSpot(14.9, -108, 3.5, -0.2, 1.2, 1.1),
+          sceneSpot(-14.9, -108, 3.7, 0.3, 1.2, 1.1),
         ],
         'willow',
       ),
@@ -103,6 +107,31 @@ export class PublicScenery {
           sceneSpot(13.3, -85.9, 3.0, -0.2),
         ],
         'bamboo',
+      ),
+      this.loadPlants(
+        'grass-clump.glb',
+        [
+          sceneSpot(15.6, -132, 2.2, 0.4),
+          sceneSpot(16.8, -129, 2.0, -0.3),
+          sceneSpot(14.8, -126, 2.4, 0.2),
+          sceneSpot(15.9, -122, 2.1, -0.5),
+          sceneSpot(16.5, -116, 2.0, 0.35),
+          sceneSpot(-15.6, -118, 2.2, -0.2),
+          sceneSpot(-16.8, -112, 2.0, 0.45),
+          sceneSpot(13.4, -92, 2.3, -0.35),
+        ],
+        'grass',
+        false,
+      ),
+      this.loadPlants(
+        'shrub.glb',
+        [
+          sceneSpot(15.2, -130, 1.5, 0.2),
+          sceneSpot(-15.4, -116, 1.4, 0.3),
+          sceneSpot(14.6, -106, 1.3, -0.2),
+        ],
+        'shrubs',
+        false,
       ),
       this.loadStructureBatch(
         'wood-pavilion.glb',
@@ -148,6 +177,12 @@ export class PublicScenery {
     const std = material as THREE.MeshStandardMaterial
     std.envMapIntensity = 0.9
     std.dithering = true
+    if (std.transparent && std.alphaTest === 0 && std.map) {
+      std.transparent = false
+      std.alphaTest = 0.4
+      std.depthWrite = true
+      std.needsUpdate = true
+    }
     for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap'] as const) {
       const texture = std[key]
       if (!texture) continue
@@ -192,11 +227,18 @@ export class PublicScenery {
     return parts
   }
 
-  private addInstances(file: string, spots: Spot[], name: string) {
+  private addInstances(file: string, spots: Spot[], name: string, shadow = true) {
     const gltf = this.loader.loadAsync(file.startsWith('/') ? file : `${BASE}${file}`)
     return gltf.then((loaded) => {
       const anisotropy = this.renderer.capabilities.getMaxAnisotropy()
       const parts = this.collectParts(loaded.scene, anisotropy)
+      if (file === 'willow.glb' || file === 'shrub.glb') {
+        // Near-camera foliage cards cover too much screen to render both faces.
+        for (const part of parts) {
+          part.material.side = THREE.FrontSide
+          part.material.needsUpdate = true
+        }
+      }
       const matrix = new THREE.Matrix4()
       const position = new THREE.Vector3()
       const quaternion = new THREE.Quaternion()
@@ -204,8 +246,8 @@ export class PublicScenery {
       for (const part of parts) {
         const batch = new THREE.InstancedMesh(part.geometry, part.material, spots.length)
         batch.name = name
-        batch.castShadow = true
-        batch.receiveShadow = true
+        batch.castShadow = shadow
+        batch.receiveShadow = shadow
         spots.forEach((item, index) => {
           position.set(item.x, item.y, item.z)
           quaternion.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, item.yaw)
@@ -220,8 +262,13 @@ export class PublicScenery {
     })
   }
 
-  private loadPlants(file: string, spots: Spot[], key: 'sakura' | 'willow' | 'bamboo') {
-    return this.addInstances(file, spots, `AwcScenery_${key}`).then(() => {
+  private loadPlants(
+    file: string,
+    spots: Spot[],
+    key: 'sakura' | 'willow' | 'bamboo' | 'grass' | 'shrubs',
+    shadow = true,
+  ) {
+    return this.addInstances(file, spots, `AwcScenery_${key}`, shadow).then(() => {
       this.counts[key] = spots.length
     })
   }
