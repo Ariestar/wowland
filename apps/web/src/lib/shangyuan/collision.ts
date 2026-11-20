@@ -140,6 +140,11 @@ export class ObstacleField {
     this.obstacles = obstacles.filter((obstacle) => obstacle.top > 1.6)
   }
 
+  add(obstacle: CollisionObstacle) {
+    if (obstacle.top <= 1.6) return
+    this.obstacles.push(obstacle)
+  }
+
   resolveCircle(x: number, y: number, radius: number, feet: number) {
     let px = x
     let py = y

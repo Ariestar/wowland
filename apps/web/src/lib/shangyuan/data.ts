@@ -14,6 +14,15 @@ export const SCENE = {
   groundZ: 1.2,
 } as const
 
+export const MVP_S1 = {
+  model: '/models/mvp/s1-entrance.glb',
+  /** Blender-space table centre; Three.js maps it to (x, groundZ, -y). */
+  pos: [16.4, -123] as const,
+  spawn: [16.4, -128] as const,
+  radius: 2.5,
+  collider: { hx: 1.05, hy: 0.72, top: 3.1 },
+} as const
+
 /** MVP release rules (PRD §7.5). */
 export const RELEASE = {
   /** Maximum player lanterns drifting at once. */
@@ -43,7 +52,7 @@ export const INTERACTABLES: {
 }[] = [
   // P01, open paving north of the paifang, clear of stall_21, the columns and
   // the planter strip (PRD §5.1 keeps the stand beside the gate).
-  { id: 'entrance', pos: [16.4, -123], radius: 2.5, label: '点亮花灯' },
+  { id: 'entrance', pos: [MVP_S1.pos[0], MVP_S1.pos[1]], radius: MVP_S1.radius, label: '点亮花灯' },
   // P02, in front of stall_22 (stall face at x ≈ 16.4).
   { id: 'riddle', pos: [15.6, -104], radius: 2.5, label: '猜灯谜' },
   // P04, quay edge level with the release platform; tighter range per PRD.
