@@ -203,6 +203,59 @@ def dedupe_materials(obj: bpy.types.Object) -> None:
         polygon.material_index = remap.get(old_index, 0)
 
 
+def remove_material_geometry(obj: bpy.types.Object, material_names: set[str]) -> int:
+    """Drop polygons whose material has been superseded by an official asset.
+
+    The old alpha cards (blossom, shrub and willow) have dark borders.  The web
+    scene places the official sakura, shrub and willow models instead, so
+    exporting those cards would leave a second canopy with black frames around
+    every leaf.  The old bark and trunk meshes are removed with them.
+    """
+    slots = [slot.material for slot in obj.material_slots]
+    removed_slots = {
+        index for index, material in enumerate(slots) if material and material.name in material_names
+    }
+    if not removed_slots:
+        return 0
+
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bm.faces.ensure_lookup_table()
+    doomed = [face for face in bm.faces if face.material_index in removed_slots]
+    for face in doomed:
+        bmesh.ops.delete(bm, geom=[face], context="FACES")
+    bm.to_mesh(obj.data)
+    bm.free()
+
+    for index in sorted(removed_slots, reverse=True):
+        obj.data.materials.pop(index=index)
+        for polygon in obj.data.polygons:
+            if polygon.material_index >= index:
+                polygon.material_index -= 1
+    return len(doomed)
+
+
+def purge_unused_material_slots(obj: bpy.types.Object) -> int:
+    """Remove material slots that no polygon uses.
+
+    The glTF exporter writes every slot on the mesh, including slots left empty
+    after superseded geometry is stripped.  Shipping those names in the GLB
+    makes the asset look like it still contains the old tree cards, so drop the
+    dead slots and shift the remaining polygon indices down with them.
+    """
+    used = {polygon.material_index for polygon in obj.data.polygons}
+    removed = 0
+    for index in range(len(obj.data.materials) - 1, -1, -1):
+        if index in used:
+            continue
+        obj.data.materials.pop(index=index)
+        for polygon in obj.data.polygons:
+            if polygon.material_index > index:
+                polygon.material_index -= 1
+        removed += 1
+    return removed
+
+
 def cull_closed_shell_materials(world: bpy.types.Object) -> tuple[int, int]:
     """Enable backface culling only on materials that cover closed shells.
 
@@ -640,7 +693,18 @@ def main() -> None:
     world.name = "LanternRiver_World"
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
     add_detail_uv(world)
+    removed_legacy_faces = remove_material_geometry(
+        world,
+        {
+            "MAT_SCENE_BlossomCard",
+            "MAT_SCENE_Bark",
+            "MAT_SCENE_Trunk",
+            "MAT_SCENE_ShrubCard",
+            "MAT_SCENE_WillowCard",
+        },
+    )
     dedupe_materials(world)
+    removed_material_slots = purge_unused_material_slots(world)
     culled, double_sided = cull_closed_shell_materials(world)
 
     world.data.calc_loop_triangles()
@@ -669,6 +733,8 @@ def main() -> None:
         "LR_WEB_WORLD_OK",
         {
             "objects_merged": len(objects),
+            "removed_legacy_faces": removed_legacy_faces,
+            "removed_material_slots": removed_material_slots,
             "triangles": len(world.data.loop_triangles),
             "materials": len(world.data.materials),
             "culled_materials": culled,

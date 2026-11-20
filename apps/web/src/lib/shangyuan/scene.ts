@@ -294,7 +294,7 @@ export class ShangyuanScene {
     this.ownerGlow.frustumCulled = false
     this.ownerGlow.userData.noGtao = true
     this.scene.add(this.ownerGlow)
-    this.waterMat = createWaterMaterial(reflectionBudget() ? 0.8 : 0.96)
+    this.waterMat = createWaterMaterial(reflectionBudget() ? 0.64 : 0.9)
     this.water = new THREE.Mesh(new THREE.PlaneGeometry(36, 380, 48, 320), this.waterMat)
     this.water.rotation.x = -Math.PI / 2
     this.water.position.set(0, 0.05, -20)
